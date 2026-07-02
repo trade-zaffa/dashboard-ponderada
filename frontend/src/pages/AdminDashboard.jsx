@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -72,8 +72,168 @@ function exportarPedidoCompra(itens, nomeCliente) {
 }
 
 
+// ─── Detalhe completo do cliente (Sortimento + Programa) ──────────────────
+const BU_COR_D  = { LMP_CASA: '#3b82f6', AL_NUT: '#22c55e', LMP_CUPE: '#ec4899', HGPER_BB: '#a855f7' }
+const BU_SHORT_D = { LMP_CASA: 'HC', AL_NUT: 'NT', LMP_CUPE: 'PC', HGPER_BB: 'BW' }
+const BU_NOME_D  = { LMP_CASA: 'Home Care', AL_NUT: 'Nutrição', LMP_CUPE: 'Personal Care', HGPER_BB: 'Beleza' }
+
+function ProgramaClienteAdmin({ cliente, periodo }) {
+  const [dados, setDados]     = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro]       = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    setErro('')
+    const ids = cliente.cd_cliens.join(',')
+    getPrograma(ids, cliente.cnpj_raiz, periodo.mes, periodo.ano)
+      .then(r => setDados(r.data))
+      .catch(e => setErro(e.response?.data?.detail || 'Erro ao carregar programa'))
+      .finally(() => setLoading(false))
+  }, [cliente, periodo])
+
+  const fmtR = (v) => {
+    if (!v) return 'R$ 0'
+    if (v >= 1_000_000) return `R$ ${(v/1_000_000).toFixed(2)}M`
+    if (v >= 1_000)     return `R$ ${(v/1_000).toFixed(1)}K`
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 py-8 text-gray-400 justify-center">
+      <div className="w-4 h-4 border-2 border-[#c9a227] border-t-transparent rounded-full animate-spin" />
+      Calculando Programa...
+    </div>
+  )
+  if (erro) return <p className="text-red-500 text-sm py-4">{erro}</p>
+  if (!dados) return null
+
+  const META_PCT = dados.crescimento_pct
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs do programa */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
+          <p className="text-[#c9a227] text-2xl font-bold">{fmtR(dados.total_ganho)}</p>
+          <p className="text-gray-400 text-xs mt-1">Ganho estimado</p>
+        </div>
+        <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
+          <p className="text-gray-300 text-2xl font-bold">{fmtR(dados.total_potencial)}</p>
+          <p className="text-gray-400 text-xs mt-1">Potencial máximo</p>
+        </div>
+        <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
+          <p className={`text-2xl font-bold ${dados.ponto_extra && dados.planograma ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {dados.ponto_extra ? '✓' : '○'} PE &nbsp; {dados.planograma ? '✓' : '○'} Plan.
+          </p>
+          <p className="text-gray-400 text-xs mt-1">Ponto Extra · Planograma</p>
+        </div>
+      </div>
+
+      {/* Tabela por BU */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Acompanhamento por BU — {MESES[periodo.mes-1]} {periodo.ano}</p>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {dados.bus.map(bu => {
+            const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
+            const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+            return (
+              <div key={bu.cd_secao} className="px-5 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded text-white"
+                      style={{ backgroundColor: BU_COR_D[bu.cd_secao] }}>
+                      {BU_SHORT_D[bu.cd_secao]}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-700">{BU_NOME_D[bu.cd_secao]}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-[#c9a227]">{fmtR(bu.ganho_bu)}</span>
+                    <span className="text-xs text-gray-400 ml-1">ganho</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Faturamento */}
+                  <div className="grid grid-cols-[70px_1fr_80px_120px] items-center gap-3">
+                    <span className="text-xs text-gray-500 font-medium">Faturamento</span>
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, bu.fat_pct)}%`, backgroundColor: fatColor }} />
+                    </div>
+                    <span className="text-sm font-bold text-right" style={{ color: fatColor }}>{bu.fat_pct}%</span>
+                    <span className="text-xs text-gray-400 text-right">
+                      {fmtR(bu.fat_atual)} / {fmtR(bu.meta_fat)}
+                    </span>
+                  </div>
+
+                  {/* Sortimento */}
+                  <div className="grid grid-cols-[70px_1fr_80px_120px] items-center gap-3">
+                    <span className="text-xs text-gray-500 font-medium">Sortimento</span>
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, bu.sort_pct)}%`, backgroundColor: sortColor }} />
+                      <div className="absolute top-0 h-full w-px bg-amber-400 opacity-60" style={{ left: '70%' }} title="Meta 70%" />
+                      <div className="absolute top-0 h-full w-px bg-emerald-500 opacity-60" style={{ left: '92%' }} title="Meta 92%" />
+                    </div>
+                    <span className="text-sm font-bold text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
+                    <span className="text-xs text-gray-400 text-right">
+                      {bu.sort_positivado} / {bu.sort_total} EANs
+                    </span>
+                  </div>
+
+                  {/* Meta base */}
+                  <p className="text-[10px] text-gray-400 pl-[82px]">
+                    Base: {fmtR(bu.fat_ano_anterior)} ({periodo.ano - 1}) + {META_PCT}% → meta {fmtR(bu.meta_fat)}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DetalheCliente({ cliente, periodo, token, onVoltar }) {
+  const [abaDetalhe, setAbaDetalhe] = useState('sortimento')
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-[#1e3a5f] text-white shadow-lg print:hidden">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
+          <button onClick={onVoltar}
+            className="bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm transition-colors">
+            ← Voltar
+          </button>
+          <span className="text-lg font-bold">{cliente.nome}</span>
+          <span className="ml-auto text-blue-200 text-sm">{MESES[periodo.mes - 1]} {periodo.ano}</span>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 flex gap-1 pb-0">
+          {[['sortimento', 'Sortimento'], ['programa', 'Programa Ponderada']].map(([id, label]) => (
+            <button key={id} onClick={() => setAbaDetalhe(id)}
+              className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${
+                abaDetalhe === id ? 'bg-gray-50 text-[#1e3a5f]' : 'text-blue-200 hover:text-white hover:bg-white/10'
+              }`}>{label}</button>
+          ))}
+        </div>
+      </header>
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {abaDetalhe === 'sortimento' && (
+          <SortimentoCliente cliente={cliente} periodo={periodo} onVoltar={onVoltar} hideHeader />
+        )}
+        {abaDetalhe === 'programa' && (
+          <ProgramaClienteAdmin cliente={cliente} periodo={periodo} />
+        )}
+      </main>
+    </div>
+  )
+}
+
 // ─── Relatório de Sortimento de um Cliente ─────────────────────────────────
-function SortimentoCliente({ cliente, periodo, onVoltar }) {
+function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -194,6 +354,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar }) {
   return (
     <div className="space-y-5">
       {/* Cabeçalho */}
+      {!hideHeader && (
       <div className="flex items-start justify-between print:hidden">
         <div>
           <h2 className="text-xl font-bold text-gray-800">{cliente.nome}</h2>
@@ -219,6 +380,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar }) {
           </button>
         </div>
       </div>
+      )}
 
       {/* Sub-tabs */}
       <div className="flex gap-1 border-b border-gray-200 print:hidden">
@@ -904,24 +1066,12 @@ export default function AdminDashboard({ token, onLogout }) {
   )
 
   if (clienteSelecionado) return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-[#1e3a5f] text-white shadow-lg print:hidden">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
-          <span className="bg-white/10 rounded-lg px-2 py-1 text-xs font-bold tracking-widest">ADMIN</span>
-          <span className="text-lg font-bold">Relatório de Sortimento</span>
-          <span className="ml-auto text-blue-200 text-sm">
-            {MESES[periodo.mes - 1]} {periodo.ano}
-          </span>
-        </div>
-      </header>
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <SortimentoCliente
-          cliente={clienteSelecionado}
-          periodo={periodo}
-          onVoltar={() => setClienteSelecionado(null)}
-        />
-      </main>
-    </div>
+    <DetalheCliente
+      cliente={clienteSelecionado}
+      periodo={periodo}
+      token={token}
+      onVoltar={() => setClienteSelecionado(null)}
+    />
   )
 
   return (

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import Portfolio from '../components/Portfolio'
 import FaturamentoDashboard from '../components/FaturamentoDashboard'
-import PedidosDashboard from '../components/PedidosDashboard'
 import ProgramaDashboard from '../components/ProgramaDashboard'
 
 const MESES_FULL = [
@@ -14,7 +13,6 @@ const hoje = new Date()
 const TABS = [
   { key: 'portfolio', label: 'Portfólio' },
   { key: 'faturamento', label: 'Faturamento' },
-  { key: 'pedidos', label: 'Pedidos' },
   { key: 'programa', label: 'Programa' },
 ]
 
@@ -104,8 +102,7 @@ export default function Dashboard({ session, onLogout }) {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {tab === 'portfolio'    && <Portfolio session={session} periodo={periodo} />}
         {tab === 'faturamento'  && <FaturamentoDashboard session={session} />}
-        {tab === 'pedidos'      && <PedidosDashboard session={session} />}
-        {tab === 'programa'     && <ProgramaDashboard session={session} />}
+{tab === 'programa'     && <ProgramaDashboard session={session} />}
       </main>
     </div>
   )
