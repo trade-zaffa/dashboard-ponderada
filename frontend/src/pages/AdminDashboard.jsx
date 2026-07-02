@@ -669,6 +669,7 @@ function SenhasAdmin({ token, clientes }) {
         </div>
         <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
           placeholder="Buscar cliente..."
+          autoComplete="off"
           className="border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-60" />
       </div>
 
@@ -710,6 +711,7 @@ function SenhasAdmin({ token, clientes }) {
                         value={senhaForm[c.cnpj_raiz] || ''}
                         onChange={e => setSenhaForm(f => ({ ...f, [c.cnpj_raiz]: e.target.value }))}
                         onKeyDown={e => e.key === 'Enter' && handleSalvar(c.cnpj_raiz)}
+                        autoComplete="new-password"
                         className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-44"
                       />
                       {m && (
