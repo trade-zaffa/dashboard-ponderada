@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -471,9 +471,16 @@ function ProgramaAdmin({ token, clientes, periodo }) {
   const { mes, ano } = periodo
   const [execucao, setExecucao] = useState({})
   const [savingExec, setSavingExec] = useState({})
+  const [resumo, setResumo] = useState([])
+  const [loadingResumo, setLoadingResumo] = useState(false)
+  const [subTab, setSubTab] = useState('ranking')
 
   useEffect(() => {
     adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data))
+    setLoadingResumo(true)
+    adminGetProgramaResumo(token, mes, ano)
+      .then(r => setResumo(r.data))
+      .finally(() => setLoadingResumo(false))
   }, [mes, ano])
 
   const toggleExec = async (cnpj_raiz, campo) => {
@@ -488,13 +495,126 @@ function ProgramaAdmin({ token, clientes, periodo }) {
     }
   }
 
+  const nomeCliente = (cnpj_raiz) => {
+    const c = clientes.find(c => c.cnpj_raiz === cnpj_raiz)
+    return c ? c.nome : cnpj_raiz
+  }
+
+  const fmtR = (v) => {
+    if (!v) return 'R$ 0'
+    if (v >= 1_000_000) return `R$ ${(v/1_000_000).toFixed(1)}M`
+    if (v >= 1_000)     return `R$ ${(v/1_000).toFixed(1)}K`
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
+
+  const BU_COR = { LMP_CASA: '#3b82f6', AL_NUT: '#22c55e', LMP_CUPE: '#ec4899', HGPER_BB: '#a855f7' }
+  const BU_SHORT = { LMP_CASA: 'HC', AL_NUT: 'NT', LMP_CUPE: 'PC', HGPER_BB: 'BW' }
+
   return (
-    <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 text-sm text-blue-700">
-        A meta de faturamento é calculada automaticamente: faturamento do mesmo mês de {ano - 1} + 15% por BU, individualmente para cada cliente.
+    <div className="space-y-5">
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 text-sm text-blue-700">
+        Meta = faturamento de {ano - 1} no mesmo mês + 15%, calculada individualmente por cliente e BU.
       </div>
 
+      {/* Sub-tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {[['ranking', 'Ranking de Ganho'], ['execucao', 'Ponto Extra & Planograma']].map(([id, label]) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              subTab === id ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-400 hover:text-gray-700'
+            }`}>{label}</button>
+        ))}
+      </div>
+
+      {/* ── Ranking de Ganho ──────────────────────────────────────────────── */}
+      {subTab === 'ranking' && (
+        loadingResumo ? (
+          <div className="flex items-center justify-center py-16 text-gray-400">
+            <div className="w-5 h-5 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin mr-2" />
+            Calculando programa para todos os clientes...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {resumo.map((r, idx) => {
+              const nome = nomeCliente(r.cnpj_raiz)
+              return (
+                <div key={r.cnpj_raiz} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                  <div className="flex items-start gap-4">
+                    {/* Posição */}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                      idx === 1 ? 'bg-gray-100 text-gray-600' :
+                      idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'
+                    }`}>{idx + 1}º</div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-800">{nome}</p>
+                          <p className="text-xs text-gray-400">{r.cnpj_raiz}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-[#c9a227]">{fmtR(r.total_ganho)}</p>
+                          <p className="text-xs text-gray-400">de {fmtR(r.total_potencial)} potencial</p>
+                        </div>
+                      </div>
+
+                      {/* Barra de atingimento */}
+                      <div className="flex items-center gap-3 mt-3">
+                        <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-[#c9a227] transition-all"
+                            style={{ width: `${Math.min(100, r.ating_pct)}%` }} />
+                        </div>
+                        <span className="text-sm font-bold text-[#c9a227] w-12 text-right">{r.ating_pct}%</span>
+                      </div>
+
+                      {/* Mini cards por BU */}
+                      <div className="grid grid-cols-4 gap-2 mt-3">
+                        {r.bus.map(bu => (
+                          <div key={bu.cd_secao} className="bg-gray-50 rounded-lg px-2 py-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
+                                style={{ backgroundColor: BU_COR[bu.cd_secao] }}>{BU_SHORT[bu.cd_secao]}</span>
+                              <span className="text-[10px] font-bold text-gray-600">{fmtR(bu.ganho_bu)}</span>
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] text-gray-400">
+                                <span>Fat.</span><span className={bu.fat_pct >= 100 ? 'text-emerald-600 font-medium' : ''}>{bu.fat_pct}%</span>
+                              </div>
+                              <div className="flex justify-between text-[10px] text-gray-400">
+                                <span>Sort.</span><span className={bu.sort_pct >= 92 ? 'text-emerald-600 font-medium' : bu.sort_pct >= 70 ? 'text-amber-500 font-medium' : ''}>{bu.sort_pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Badges PE e Planograma */}
+                      <div className="flex gap-2 mt-2">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                          r.ponto_extra ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'
+                        }`}>PE {r.ponto_extra ? '✓' : '○'}</span>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                          r.planograma ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                        }`}>Planograma {r.planograma ? '✓' : '○'}</span>
+                        <span className="text-[10px] text-gray-400 ml-1">
+                          Fat: {fmtR(r.total_fat_atual)} / meta {fmtR(r.total_meta_fat)} ({r.fat_pct_total}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {resumo.length === 0 && (
+              <p className="text-center text-gray-400 py-10">Nenhum dado encontrado para o período</p>
+            )}
+          </div>
+        )
+      )}
+
       {/* ── Ponto Extra e Planograma por cliente ─────────────────────────── */}
+      {subTab === 'execucao' && (
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-50">
           <h3 className="font-semibold text-gray-800">Execução por Cliente — {MESES[mes - 1]} {ano}</h3>
@@ -547,6 +667,7 @@ function ProgramaAdmin({ token, clientes, periodo }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

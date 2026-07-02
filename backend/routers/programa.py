@@ -256,6 +256,221 @@ def get_programa_execucao(
     }
 
 
+@router.get("/admin/programa-resumo")
+def get_programa_resumo(
+    authorization: str = Header(None),
+    mes: int = Query(...),
+    ano: int = Query(...),
+):
+    """Resumo do programa para TODOS os clientes ponderada — visão admin."""
+    _check_admin(authorization)
+    ano_anterior = ano - 1
+
+    # ── 1. Execuções e meta_eans do SQLite ────────────────────────────────────
+    db = get_db()
+    exec_rows = db.execute(
+        "SELECT cnpj_raiz, ponto_extra, planograma FROM programa_execucao WHERE mes=? AND ano=?",
+        (mes, ano),
+    ).fetchall()
+    execucao_map = {
+        r["cnpj_raiz"]: {"ponto_extra": bool(r["ponto_extra"]), "planograma": bool(r["planograma"])}
+        for r in exec_rows
+    }
+    meta_eans_map = {
+        r["cd_secao"]: r["meta_eans"]
+        for r in db.execute(
+            "SELECT cd_secao, meta_eans FROM ponderada_meta WHERE mes=? AND ano=?",
+            (mes, ano),
+        ).fetchall()
+    }
+    db.close()
+
+    # ── 2. Faturamento atual + anterior para todos os clientes ponderada ──────
+    sql_fat_all = f"""
+        SELECT
+            LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8) AS cnpj_raiz,
+            s.cd_secao,
+            SUM(CASE WHEN YEAR(n.dt_emis) = {ano}          AND MONTH(n.dt_emis) = {mes}
+                     THEN CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
+                          ELSE in2.vl_tot_liquido * (in2.qtde - ISNULL(in2.qtde_dev,0)) / NULLIF(in2.qtde,0) END
+                     ELSE 0 END) AS fat_atual,
+            SUM(CASE WHEN YEAR(n.dt_emis) = {ano_anterior} AND MONTH(n.dt_emis) = {mes}
+                     THEN CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
+                          ELSE in2.vl_tot_liquido * (in2.qtde - ISNULL(in2.qtde_dev,0)) / NULLIF(in2.qtde,0) END
+                     ELSE 0 END) AS fat_anterior
+        FROM ped_vda pv
+        JOIN nota n      ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
+        JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+        JOIN produto p   ON p.cd_prod = in2.cd_prod
+        JOIN linha l     ON l.cd_linha = p.cd_linha
+        JOIN secao s     ON s.cd_secao = l.cd_secao
+        JOIN cliente c   ON c.cd_clien = pv.cd_clien
+        JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        WHERE csf.CdFabric = 'UNILEV'
+          AND csf.RamAtiv IN ('33  ','34  ')
+          AND c.ativo = 1
+          AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+          AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND (
+            (YEAR(n.dt_emis) = {ano}          AND MONTH(n.dt_emis) = {mes}) OR
+            (YEAR(n.dt_emis) = {ano_anterior} AND MONTH(n.dt_emis) = {mes})
+          )
+        GROUP BY LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8), s.cd_secao
+    """
+
+    # ── 3. Sortimento positivado por cliente por BU ───────────────────────────
+    sql_sort_all = f"""
+        WITH base AS (
+            SELECT DISTINCT p.cd_prod, s.cd_secao
+            FROM produto p
+            JOIN linha l ON l.cd_linha = p.cd_linha
+            JOIN secao s ON s.cd_secao = l.cd_secao
+            JOIN estoque e ON e.cd_prod = p.cd_prod AND e.cd_local = 'CENTRAL'
+            WHERE p.cd_fabric = 'UNILEV' AND p.ativo = 1
+              AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+              AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+              AND (e.qtde - ISNULL(e.qtde_pend_pedv,0)) > 0
+        ),
+        grupos AS (
+            SELECT LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8) AS cnpj_raiz,
+                   COUNT(*) AS n_lojas
+            FROM cliente c
+            JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+            WHERE csf.CdFabric = 'UNILEV' AND csf.RamAtiv IN ('33  ','34  ') AND c.ativo = 1
+            GROUP BY LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8)
+        ),
+        vendas AS (
+            SELECT LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8) AS cnpj_raiz,
+                   in2.cd_prod,
+                   SUM(CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) > 0
+                            THEN (in2.qtde - ISNULL(in2.qtde_dev,0)) * in2.fator_est_vda ELSE 0 END) AS unidades
+            FROM ped_vda pv
+            JOIN nota n      ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
+            JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+            JOIN cliente c   ON c.cd_clien = pv.cd_clien
+            JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+            WHERE csf.CdFabric = 'UNILEV' AND csf.RamAtiv IN ('33  ','34  ')
+              AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+              AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+              AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+              AND MONTH(n.dt_emis) = {mes} AND YEAR(n.dt_emis) = {ano}
+            GROUP BY LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8), in2.cd_prod
+        )
+        SELECT g.cnpj_raiz, b.cd_secao,
+               COUNT(DISTINCT b.cd_prod) AS total_eans,
+               COUNT(DISTINCT CASE WHEN v.unidades >= g.n_lojas * 3 THEN b.cd_prod END) AS positivado
+        FROM grupos g
+        CROSS JOIN base b
+        LEFT JOIN vendas v ON v.cnpj_raiz = g.cnpj_raiz AND v.cd_prod = b.cd_prod
+        GROUP BY g.cnpj_raiz, b.cd_secao
+    """
+
+    try:
+        conn = get_connection()
+        cur  = conn.cursor()
+
+        cur.execute(sql_fat_all)
+        # fat_data[cnpj_raiz][bu] = {fat_atual, fat_anterior}
+        fat_data = {}
+        for r in cur.fetchall():
+            cr = r.cnpj_raiz.strip()
+            if cr not in fat_data:
+                fat_data[cr] = {}
+            fat_data[cr][r.cd_secao.strip()] = {
+                "fat_atual":    float(r.fat_atual    or 0),
+                "fat_anterior": float(r.fat_anterior or 0),
+            }
+
+        cur.execute(sql_sort_all)
+        sort_data = {}
+        for r in cur.fetchall():
+            cr = r.cnpj_raiz.strip()
+            if cr not in sort_data:
+                sort_data[cr] = {}
+            sort_data[cr][r.cd_secao.strip()] = {
+                "total":      r.total_eans,
+                "positivado": r.positivado,
+            }
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # ── 4. Calcular ganho por cliente ─────────────────────────────────────────
+    todos_cnpjs = set(fat_data.keys()) | set(sort_data.keys())
+    resultado = []
+
+    for cnpj_raiz in todos_cnpjs:
+        exec_cli   = execucao_map.get(cnpj_raiz, {"ponto_extra": False, "planograma": False})
+        ponto_extra = exec_cli["ponto_extra"]
+        planograma  = exec_cli["planograma"]
+
+        total_ganho     = 0.0
+        total_potencial = 0.0
+        total_fat_atual = 0.0
+        total_meta_fat  = 0.0
+        bus_detail = []
+
+        for bu in BUS:
+            fat = fat_data.get(cnpj_raiz, {}).get(bu, {"fat_atual": 0, "fat_anterior": 0})
+            srt = sort_data.get(cnpj_raiz, {}).get(bu, {"total": 0, "positivado": 0})
+            meta_eans = meta_eans_map.get(bu, 0)
+
+            meta_fat  = fat["fat_anterior"] * META_CRESCIMENTO
+            fat_atual = fat["fat_atual"]
+
+            sort_pos  = srt["positivado"]
+            sort_pct  = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
+            sort_peso = _sortimento_faixa(sort_pct)
+
+            fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
+            fat_peso = fat_pct / 100 * 1.0
+
+            pe_peso   = 0.50 if ponto_extra else 0.0
+            plan_peso = 0.50 if planograma  else 0.0
+
+            total_peso   = sort_peso + pe_peso + plan_peso + fat_peso
+            ganho_bu     = meta_fat * total_peso / 100
+            potencial_bu = meta_fat * 2.50 / 100
+
+            total_ganho     += ganho_bu
+            total_potencial += potencial_bu
+            total_fat_atual += fat_atual
+            total_meta_fat  += meta_fat
+
+            bus_detail.append({
+                "cd_secao":   bu,
+                "fat_atual":  round(fat_atual, 2),
+                "meta_fat":   round(meta_fat, 2),
+                "fat_pct":    round(fat_pct, 1),
+                "sort_pct":   round(sort_pct, 1),
+                "sort_peso":  sort_peso,
+                "fat_peso":   round(fat_peso, 4),
+                "ganho_bu":   round(ganho_bu, 2),
+            })
+
+        fat_pct_total = min(100.0, (total_fat_atual / total_meta_fat * 100) if total_meta_fat > 0 else 0.0)
+
+        resultado.append({
+            "cnpj_raiz":      cnpj_raiz,
+            "ponto_extra":    ponto_extra,
+            "planograma":     planograma,
+            "total_fat_atual":  round(total_fat_atual, 2),
+            "total_meta_fat":   round(total_meta_fat, 2),
+            "fat_pct_total":    round(fat_pct_total, 1),
+            "total_ganho":      round(total_ganho, 2),
+            "total_potencial":  round(total_potencial, 2),
+            "ating_pct":        round((total_ganho / total_potencial * 100) if total_potencial > 0 else 0, 1),
+            "bus": bus_detail,
+        })
+
+    resultado.sort(key=lambda x: x["total_ganho"], reverse=True)
+    return resultado
+
+
 @router.post("/admin/programa-execucao")
 def set_programa_execucao(body: ExecucaoInput, authorization: str = Header(None)):
     _check_admin(authorization)
