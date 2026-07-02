@@ -101,6 +101,24 @@ function BUCard({ bu, data }) {
           </div>
         </div>
 
+        {/* Meta de faturamento desta BU */}
+        {data.meta_fat > 0 && (
+          <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Meta desta BU</p>
+              <p className="text-sm font-bold text-gray-800">{fmtFull(data.meta_fat)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                base {new Date().getFullYear() - 1}: {fmtFull(data.fat_ano_anterior)} + 15%
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Potencial (2,5%)</p>
+              <p className="text-sm font-bold text-[#c9a227]">{fmtFull(data.potencial_bu)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">= 2,5% × meta</p>
+            </div>
+          </div>
+        )}
+
         {/* 4 Pilares */}
         <div className="grid grid-cols-2 gap-2">
           {/* Sortimento */}
@@ -142,11 +160,6 @@ function BUCard({ bu, data }) {
                 <p className="text-[10px] text-gray-400 mt-0.5">
                   {fmtFull(data.fat_atual)} de {fmtFull(data.meta_fat)} meta · {data.fat_pct}% atingido
                 </p>
-                {data.fat_ano_anterior > 0 && (
-                  <p className="text-[10px] text-gray-300 mt-0.5">
-                    Base: {fmtFull(data.fat_ano_anterior)} ({new Date().getFullYear() - 1}) +15%
-                  </p>
-                )}
               </div>
               <div className="text-right">
                 <p className={`text-sm font-bold ${data.fat_peso > 0 ? 'text-amber-700' : 'text-gray-300'}`}>
@@ -216,8 +229,15 @@ function BUCard({ bu, data }) {
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function ProgramaDashboard({ session }) {
   const hoje = new Date()
-  const [mes, setMes]     = useState(hoje.getMonth() + 1)
-  const [ano, setAno]     = useState(hoje.getFullYear())
+  // Abre no último mês completo (mês atual tem poucos dados nos primeiros dias)
+  const mesInicial = hoje.getDate() <= 5
+    ? (hoje.getMonth() === 0 ? 12 : hoje.getMonth())
+    : hoje.getMonth() + 1
+  const anoInicial = hoje.getDate() <= 5 && hoje.getMonth() === 0
+    ? hoje.getFullYear() - 1
+    : hoje.getFullYear()
+  const [mes, setMes]     = useState(mesInicial)
+  const [ano, setAno]     = useState(anoInicial)
   const [data, setData]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
@@ -284,7 +304,10 @@ export default function ProgramaDashboard({ session }) {
           <div>
             <p className="text-xs text-white/50 uppercase tracking-widest font-medium">Ganho Total Estimado</p>
             <p className="text-5xl font-bold mt-2 text-[#c9a227]">{fmtFull(data.total_ganho)}</p>
-            <p className="text-sm text-white/40 mt-1">de {fmtFull(data.total_potencial)} potencial</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <p className="text-sm text-white/40">de {fmtFull(data.total_potencial)} potencial</p>
+              <p className="text-xs text-white/25">(2,5% × {fmtFull(data.bus.reduce((s,b)=>s+b.meta_fat,0))} meta total)</p>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-3xl font-bold text-[#c9a227]">{atingPct.toFixed(1)}%</p>
