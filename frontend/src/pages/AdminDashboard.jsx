@@ -538,70 +538,85 @@ function ProgramaAdmin({ token, clientes, periodo }) {
             {resumo.map((r, idx) => {
               const nome = nomeCliente(r.cnpj_raiz)
               return (
-                <div key={r.cnpj_raiz} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                  <div className="flex items-start gap-4">
-                    {/* Posição */}
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                <div key={r.cnpj_raiz} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Cabeçalho do cliente */}
+                  <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-50">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                       idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                      idx === 1 ? 'bg-gray-100 text-gray-600' :
+                      idx === 1 ? 'bg-gray-100 text-gray-500' :
                       idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'
                     }`}>{idx + 1}º</div>
-
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <p className="font-semibold text-gray-800">{nome}</p>
-                          <p className="text-xs text-gray-400">{r.cnpj_raiz}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-[#c9a227]">{fmtR(r.total_ganho)}</p>
-                          <p className="text-xs text-gray-400">de {fmtR(r.total_potencial)} potencial</p>
-                        </div>
-                      </div>
-
-                      {/* Barra de atingimento */}
-                      <div className="flex items-center gap-3 mt-3">
-                        <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-[#c9a227] transition-all"
-                            style={{ width: `${Math.min(100, r.ating_pct)}%` }} />
-                        </div>
-                        <span className="text-sm font-bold text-[#c9a227] w-12 text-right">{r.ating_pct}%</span>
-                      </div>
-
-                      {/* Mini cards por BU */}
-                      <div className="grid grid-cols-4 gap-2 mt-3">
-                        {r.bus.map(bu => (
-                          <div key={bu.cd_secao} className="bg-gray-50 rounded-lg px-2 py-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
-                                style={{ backgroundColor: BU_COR[bu.cd_secao] }}>{BU_SHORT[bu.cd_secao]}</span>
-                              <span className="text-[10px] font-bold text-gray-600">{fmtR(bu.ganho_bu)}</span>
-                            </div>
-                            <div className="space-y-0.5">
-                              <div className="flex justify-between text-[10px] text-gray-400">
-                                <span>Fat.</span><span className={bu.fat_pct >= 100 ? 'text-emerald-600 font-medium' : ''}>{bu.fat_pct}%</span>
-                              </div>
-                              <div className="flex justify-between text-[10px] text-gray-400">
-                                <span>Sort.</span><span className={bu.sort_pct >= 92 ? 'text-emerald-600 font-medium' : bu.sort_pct >= 70 ? 'text-amber-500 font-medium' : ''}>{bu.sort_pct}%</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Badges PE e Planograma */}
-                      <div className="flex gap-2 mt-2">
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                          r.ponto_extra ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'
-                        }`}>PE {r.ponto_extra ? '✓' : '○'}</span>
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                          r.planograma ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'
-                        }`}>Planograma {r.planograma ? '✓' : '○'}</span>
-                        <span className="text-[10px] text-gray-400 ml-1">
-                          Fat: {fmtR(r.total_fat_atual)} / meta {fmtR(r.total_meta_fat)} ({r.fat_pct_total}%)
-                        </span>
+                      <p className="font-semibold text-gray-800 truncate">{nome}</p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-gray-400">{r.cnpj_raiz}</span>
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${r.ponto_extra ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-300'}`}>PE {r.ponto_extra ? '✓' : '○'}</span>
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${r.planograma ? 'bg-teal-100 text-teal-600' : 'bg-gray-100 text-gray-300'}`}>Planograma {r.planograma ? '✓' : '○'}</span>
                       </div>
                     </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold text-[#c9a227]">{fmtR(r.total_ganho)}</p>
+                      <p className="text-xs text-gray-400">{r.ating_pct}% do potencial</p>
+                    </div>
+                  </div>
+
+                  {/* Faturamento por BU */}
+                  <div className="divide-y divide-gray-50">
+                    {r.bus.map(bu => {
+                      const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
+                      const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+                      return (
+                        <div key={bu.cd_secao} className="grid grid-cols-[80px_1fr_110px] items-center gap-4 px-5 py-3">
+                          {/* BU label */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded text-white shrink-0"
+                              style={{ backgroundColor: BU_COR[bu.cd_secao] }}>{BU_SHORT[bu.cd_secao]}</span>
+                          </div>
+
+                          {/* Barras Fat + Sort */}
+                          <div className="space-y-1.5">
+                            {/* Faturamento */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400 w-7 shrink-0">Fat.</span>
+                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all"
+                                  style={{ width: `${Math.min(100, bu.fat_pct)}%`, backgroundColor: fatColor }} />
+                              </div>
+                              <span className="text-[11px] font-semibold w-9 text-right" style={{ color: fatColor }}>{bu.fat_pct}%</span>
+                              <span className="text-[10px] text-gray-400 hidden sm:block">
+                                {fmtR(bu.fat_atual)} / {fmtR(bu.meta_fat)}
+                              </span>
+                            </div>
+                            {/* Sortimento */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400 w-7 shrink-0">Sort.</span>
+                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all"
+                                  style={{ width: `${Math.min(100, bu.sort_pct)}%`, backgroundColor: sortColor }} />
+                              </div>
+                              <span className="text-[11px] font-semibold w-9 text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
+                            </div>
+                          </div>
+
+                          {/* Ganho desta BU */}
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-gray-700">{fmtR(bu.ganho_bu)}</p>
+                            <p className="text-[10px] text-gray-400">{fmtR(bu.fat_atual)}</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Rodapé: fat total vs meta total */}
+                  <div className="px-5 py-2.5 bg-gray-50 flex items-center gap-3">
+                    <span className="text-xs text-gray-500">Total faturado:</span>
+                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-[#1e3a5f] transition-all"
+                        style={{ width: `${Math.min(100, r.fat_pct_total)}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-[#1e3a5f] w-10 text-right">{r.fat_pct_total}%</span>
+                    <span className="text-xs text-gray-400">{fmtR(r.total_fat_atual)} / meta {fmtR(r.total_meta_fat)}</span>
                   </div>
                 </div>
               )
