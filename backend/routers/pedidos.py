@@ -1,0 +1,225 @@
+from fastapi import APIRouter, HTTPException, Query
+from database import get_connection
+
+router = APIRouter()
+
+
+def _vl_fat(alias='in2'):
+    return (
+        f"CASE WHEN ({alias}.qtde - ISNULL({alias}.qtde_dev,0)) <= 0 THEN 0 "
+        f"ELSE {alias}.vl_tot_liquido * ({alias}.qtde - ISNULL({alias}.qtde_dev,0)) "
+        f"/ NULLIF({alias}.qtde,0) END"
+    )
+
+
+@router.get("/pedidos-abertos")
+def get_pedidos_abertos(cd_cliens: str = Query(...)):
+    """Resumo por BU: faturado no mês atual vs em aberto."""
+    ids = [int(x.strip()) for x in cd_cliens.split(",")]
+    ph = ",".join("?" * len(ids))
+
+    sql_fat = f"""
+        SELECT s.cd_secao,
+               SUM({_vl_fat()}) AS vl_faturado
+        FROM ped_vda pv
+        JOIN nota n      ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
+        JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+        JOIN produto p   ON p.cd_prod = in2.cd_prod
+        JOIN linha l     ON l.cd_linha = p.cd_linha
+        JOIN secao s     ON s.cd_secao = l.cd_secao
+        WHERE pv.cd_clien IN ({ph})
+          AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+          AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND MONTH(n.dt_emis) = MONTH(GETDATE())
+          AND YEAR(n.dt_emis) = YEAR(GETDATE())
+        GROUP BY s.cd_secao
+    """
+
+    sql_abe = f"""
+        SELECT s.cd_secao,
+               COUNT(DISTINCT pv.nu_ped) AS qtd_pedidos,
+               SUM(ip.qtde * COALESCE(ip.vl_unit_ped / NULLIF(ip.fator_est_ped,0), ip.vl_unit_ped)) AS vl_aberto
+        FROM ped_vda pv
+        JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+        JOIN produto p  ON p.cd_prod = ip.cd_prod
+        JOIN linha l    ON l.cd_linha = p.cd_linha
+        JOIN secao s    ON s.cd_secao = l.cd_secao
+        WHERE pv.cd_clien IN ({ph})
+          AND pv.cfop IN ('5101','5102','5405','5922','6102')
+          AND pv.situacao = 'AB'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+        GROUP BY s.cd_secao
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(sql_fat, ids)
+        fat_map = {r.cd_secao.strip(): float(r.vl_faturado or 0) for r in cursor.fetchall()}
+
+        cursor.execute(sql_abe, ids)
+        abe_rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    BUS = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
+    abe_map = {r.cd_secao.strip(): r for r in abe_rows}
+
+    return [
+        {
+            "cd_secao": bu,
+            "vl_faturado": fat_map.get(bu, 0.0),
+            "vl_aberto": float(abe_map[bu].vl_aberto) if bu in abe_map else 0.0,
+            "qtd_pedidos": int(abe_map[bu].qtd_pedidos) if bu in abe_map else 0,
+        }
+        for bu in BUS
+    ]
+
+
+@router.get("/pedidos")
+def get_pedidos(cd_cliens: str = Query(...)):
+    """Lista todos os pedidos em aberto do cliente com etapa do workflow e totais."""
+    ids = [int(x.strip()) for x in cd_cliens.split(",")]
+    placeholders = ",".join("?" * len(ids))
+
+    sql = f"""
+        SELECT
+            pv.nu_ped,
+            CAST(pv.dt_cad AS DATE) AS dt_pedido,
+            pv.cfop,
+            pv.tp_ped,
+            pv.InicioProcessoFatura,
+            (
+                SELECT STRING_AGG(ISNULL(f2.des_fila, 'SEM FILA'), ' / ')
+                FROM evento e2
+                LEFT JOIN fila f2 ON f2.cd_fila = e2.cd_fila
+                WHERE e2.nu_ped = pv.nu_ped
+                  AND e2.cd_emp = pv.cd_emp
+                  AND e2.dt_encer IS NULL
+            ) AS etapas,
+            (
+                SELECT STRING_AGG(e2.cd_fila, ',')
+                FROM evento e2
+                WHERE e2.nu_ped = pv.nu_ped
+                  AND e2.cd_emp = pv.cd_emp
+                  AND e2.dt_encer IS NULL
+            ) AS cd_filas,
+            COUNT(DISTINCT p.cd_prod) AS qtd_produtos,
+            SUM(ip.qtde * ip.fator_est_ped) AS total_unidades,
+            ROUND(SUM(ip.qtde * COALESCE(
+                ip.vl_unit_ped / NULLIF(ip.fator_est_ped, 0),
+                ip.vl_unit_ped
+            )), 2) AS valor_estimado
+        FROM ped_vda pv
+        JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+        JOIN produto p ON p.cd_prod = ip.cd_prod
+        JOIN linha l ON l.cd_linha = p.cd_linha
+        JOIN secao s ON s.cd_secao = l.cd_secao
+        WHERE pv.cd_clien IN ({placeholders})
+            AND pv.cfop IN ('5101','5102','5405','5922','6102')
+            AND pv.situacao = 'AB'
+            AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+            AND p.cd_fabric = 'UNILEV'
+            AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+        GROUP BY pv.nu_ped, pv.dt_cad, pv.cfop, pv.tp_ped, pv.InicioProcessoFatura, pv.cd_emp
+        ORDER BY pv.dt_cad DESC
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, ids)
+        rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return [
+        {
+            "nu_ped": r.nu_ped,
+            "dt_pedido": str(r.dt_pedido),
+            "cfop": r.cfop,
+            "tp_ped": r.tp_ped.strip() if r.tp_ped else "",
+            "inicio_fatura": r.InicioProcessoFatura,
+            "etapas": r.etapas or "",
+            "cd_filas": r.cd_filas or "",
+            "qtd_produtos": r.qtd_produtos,
+            "total_unidades": int(r.total_unidades) if r.total_unidades else 0,
+            "valor_estimado": float(r.valor_estimado) if r.valor_estimado else 0.0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/pedidos/{nu_ped}/itens")
+def get_pedido_itens(nu_ped: int, cd_cliens: str = Query(...)):
+    """Retorna itens Unilever de um pedido. Valida posse via cd_cliens."""
+    ids = [int(x.strip()) for x in cd_cliens.split(",")]
+    placeholders = ",".join("?" * len(ids))
+
+    sql_check = f"""
+        SELECT COUNT(*) AS cnt FROM ped_vda
+        WHERE nu_ped = ? AND cd_clien IN ({placeholders})
+    """
+    sql_itens = """
+        SELECT
+            p.cd_barra AS ean,
+            p.descricao AS produto,
+            p.cd_prod_fabric AS cod_fabricante,
+            s.cd_secao,
+            ip.qtde AS qtde_caixas,
+            ip.fator_est_ped,
+            CAST(ROUND(ip.qtde * ip.fator_est_ped, 0) AS INT) AS total_unidades,
+            ROUND(ip.vl_unit_ped, 2) AS vl_unit,
+            ROUND(ip.qtde * COALESCE(
+                ip.vl_unit_ped / NULLIF(ip.fator_est_ped, 0),
+                ip.vl_unit_ped
+            ), 2) AS valor_item
+        FROM it_pedv ip
+        JOIN produto p ON p.cd_prod = ip.cd_prod
+        JOIN linha l ON l.cd_linha = p.cd_linha
+        JOIN secao s ON s.cd_secao = l.cd_secao
+        WHERE ip.nu_ped = ?
+            AND p.cd_fabric = 'UNILEV'
+            AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+        ORDER BY s.cd_secao, p.descricao
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql_check, [nu_ped] + ids)
+        check = cursor.fetchone()
+        if not check or check.cnt == 0:
+            raise HTTPException(status_code=403, detail="Pedido não encontrado")
+        cursor.execute(sql_itens, [nu_ped])
+        rows = cursor.fetchall()
+        conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return [
+        {
+            "ean": r.ean,
+            "produto": r.produto.strip() if r.produto else "",
+            "cod_fabricante": r.cod_fabricante or "",
+            "cd_secao": r.cd_secao.strip(),
+            "qtde_caixas": float(r.qtde_caixas),
+            "fator_est_ped": r.fator_est_ped,
+            "total_unidades": r.total_unidades,
+            "vl_unit": float(r.vl_unit) if r.vl_unit else 0.0,
+            "valor_item": float(r.valor_item) if r.valor_item else 0.0,
+        }
+        for r in rows
+    ]

@@ -1,0 +1,25 @@
+# Credenciais — NUNCA subir
+backend/.env
+backend/metas.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Logs
+*.log
+*.err
+
+# OS
+.DS_Store
+Thumbs.db
