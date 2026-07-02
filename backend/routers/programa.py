@@ -6,20 +6,12 @@ from routers.metas import get_db, _check_admin
 router = APIRouter()
 
 BUS = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
+META_CRESCIMENTO = 1.15  # +15% sobre o ano anterior
 
-# ── Tabelas ────────────────────────────────────────────────────────────────────
+# ── Tabela de execução (PE + planograma) ───────────────────────────────────────
 
 def _init_programa_tables():
     conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS programa_meta_fat (
-            cd_secao TEXT    NOT NULL,
-            mes      INTEGER NOT NULL,
-            ano      INTEGER NOT NULL,
-            meta_fat REAL    NOT NULL,
-            UNIQUE(cd_secao, mes, ano)
-        )
-    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS programa_execucao (
             cnpj_raiz   TEXT    NOT NULL,
@@ -36,10 +28,9 @@ def _init_programa_tables():
 _init_programa_tables()
 
 
-# ── Helpers de cálculo ─────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _sortimento_faixa(pct: float) -> float:
-    """Retorna o % de ganho do pilar sortimento conforme faixa."""
     if pct >= 92:
         return 0.50
     if pct >= 70:
@@ -47,44 +38,8 @@ def _sortimento_faixa(pct: float) -> float:
     return 0.0
 
 
-# ── Endpoint cliente ───────────────────────────────────────────────────────────
-
-@router.get("/programa")
-def get_programa(
-    cd_cliens: str = Query(...),
-    cnpj_raiz: str = Query(...),
-    mes: int = Query(...),
-    ano: int = Query(...),
-):
-    ids = [int(x.strip()) for x in cd_cliens.split(",")]
-    ph = ",".join("?" * len(ids))
-    n_lojas = len(ids)
-
-    # ── 1. Metas e execuções do SQLite ────────────────────────────────────────
-    db = get_db()
-    metas_fat = {
-        r["cd_secao"]: r["meta_fat"]
-        for r in db.execute(
-            "SELECT cd_secao, meta_fat FROM programa_meta_fat WHERE mes=? AND ano=?",
-            (mes, ano),
-        ).fetchall()
-    }
-    execucao = db.execute(
-        "SELECT ponto_extra, planograma FROM programa_execucao WHERE cnpj_raiz=? AND mes=? AND ano=?",
-        (cnpj_raiz, mes, ano),
-    ).fetchone()
-    meta_eans_rows = db.execute(
-        "SELECT cd_secao, meta_eans FROM ponderada_meta WHERE mes=? AND ano=?",
-        (mes, ano),
-    ).fetchall()
-    meta_eans_map = {r["cd_secao"]: r["meta_eans"] for r in meta_eans_rows}
-    db.close()
-
-    ponto_extra = bool(execucao["ponto_extra"]) if execucao else False
-    planograma  = bool(execucao["planograma"])  if execucao else False
-
-    # ── 2. Faturamento por BU no mês (MOINHO) ─────────────────────────────────
-    sql_fat = f"""
+def _sql_faturado(ph: str) -> str:
+    return f"""
         SELECT s.cd_secao,
                SUM(CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
                     ELSE in2.vl_tot_liquido * (in2.qtde - ISNULL(in2.qtde_dev,0)) / NULLIF(in2.qtde,0)
@@ -106,7 +61,40 @@ def get_programa(
         GROUP BY s.cd_secao
     """
 
-    # ── 3. Sortimento positivado por BU no mês (MOINHO) ───────────────────────
+
+# ── Endpoint cliente ───────────────────────────────────────────────────────────
+
+@router.get("/programa")
+def get_programa(
+    cd_cliens: str = Query(...),
+    cnpj_raiz: str = Query(...),
+    mes: int = Query(...),
+    ano: int = Query(...),
+):
+    ids = [int(x.strip()) for x in cd_cliens.split(",")]
+    ph = ",".join("?" * len(ids))
+    n_lojas = len(ids)
+    ano_anterior = ano - 1
+
+    # ── 1. SQLite: execução e meta de EANs ────────────────────────────────────
+    db = get_db()
+    execucao = db.execute(
+        "SELECT ponto_extra, planograma FROM programa_execucao WHERE cnpj_raiz=? AND mes=? AND ano=?",
+        (cnpj_raiz, mes, ano),
+    ).fetchone()
+    meta_eans_map = {
+        r["cd_secao"]: r["meta_eans"]
+        for r in db.execute(
+            "SELECT cd_secao, meta_eans FROM ponderada_meta WHERE mes=? AND ano=?",
+            (mes, ano),
+        ).fetchall()
+    }
+    db.close()
+
+    ponto_extra = bool(execucao["ponto_extra"]) if execucao else False
+    planograma  = bool(execucao["planograma"])  if execucao else False
+
+    sql_fat  = _sql_faturado(ph)
     sql_sort = f"""
         WITH base AS (
             SELECT DISTINCT p.cd_prod, s.cd_secao
@@ -147,128 +135,96 @@ def get_programa(
         conn = get_connection()
         cur  = conn.cursor()
 
+        # Faturamento mês atual
         cur.execute(sql_fat, ids + [mes, ano])
         fat_map = {r.cd_secao.strip(): float(r.vl_faturado or 0) for r in cur.fetchall()}
 
+        # Faturamento mesmo mês ano anterior → meta (+15%)
+        cur.execute(sql_fat, ids + [mes, ano_anterior])
+        meta_fat_map = {
+            r.cd_secao.strip(): float(r.vl_faturado or 0) * META_CRESCIMENTO
+            for r in cur.fetchall()
+        }
+
+        # Sortimento
         cur.execute(sql_sort, ids + [mes, ano])
         sort_map = {
-            r.cd_secao.strip(): {
-                "total": r.total_eans,
-                "positivado": r.positivado,
-            }
+            r.cd_secao.strip(): {"total": r.total_eans, "positivado": r.positivado}
             for r in cur.fetchall()
         }
         conn.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # ── 4. Montar resultado por BU ─────────────────────────────────────────────
+    # ── 3. Montar resultado por BU ─────────────────────────────────────────────
     resultado = []
-    total_ganho = 0.0
+    total_ganho    = 0.0
     total_potencial = 0.0
 
     for bu in BUS:
-        meta_fat = metas_fat.get(bu, 0.0)
+        meta_fat  = meta_fat_map.get(bu, 0.0)
         meta_eans = meta_eans_map.get(bu, 0)
         fat_atual = fat_map.get(bu, 0.0)
         sort_data = sort_map.get(bu, {"total": 0, "positivado": 0})
 
-        # Sortimento: % atingido vs meta_eans
-        sort_pos = sort_data["positivado"]
-        sort_pct = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
+        # Sortimento
+        sort_pos  = sort_data["positivado"]
+        sort_pct  = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
         sort_peso = _sortimento_faixa(sort_pct)
 
-        # Faturamento: proporcional, cap em 100%
+        # Faturamento proporcional (cap 100%)
         fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
-        fat_peso = fat_pct / 100 * 1.0  # peso máximo 1.00%
+        fat_peso = fat_pct / 100 * 1.0
 
-        # Ponto Extra e Planograma: binário
+        # PE e Planograma
         pe_peso   = 0.50 if ponto_extra else 0.0
         plan_peso = 0.50 if planograma  else 0.0
 
-        total_peso   = sort_peso + pe_peso + plan_peso + fat_peso  # % total ganho
-        potencial    = (0.50 + 0.50 + 0.50 + 1.00)                # % potencial máximo
-
+        total_peso   = sort_peso + pe_peso + plan_peso + fat_peso
         ganho_bu     = meta_fat * total_peso / 100
-        potencial_bu = meta_fat * potencial  / 100
+        potencial_bu = meta_fat * 2.50 / 100
 
-        total_ganho    += ganho_bu
+        total_ganho     += ganho_bu
         total_potencial += potencial_bu
 
+        # Faturamento ano anterior (base da meta, sem o +15%)
+        fat_ano_ant = meta_fat / META_CRESCIMENTO if meta_fat > 0 else 0.0
+
         resultado.append({
-            "cd_secao":      bu,
-            "meta_fat":      meta_fat,
-            "meta_eans":     meta_eans,
-            # Sortimento
+            "cd_secao":        bu,
+            "meta_fat":        round(meta_fat, 2),
+            "fat_ano_anterior": round(fat_ano_ant, 2),
+            "meta_eans":       meta_eans,
             "sort_positivado": sort_pos,
             "sort_total":      sort_data["total"],
             "sort_pct":        round(sort_pct, 1),
             "sort_peso":       sort_peso,
-            # Faturamento
-            "fat_atual":  fat_atual,
-            "fat_pct":    round(fat_pct, 1),
-            "fat_peso":   round(fat_peso, 4),
-            # PE e Planograma
-            "ponto_extra": ponto_extra,
-            "planograma":  planograma,
-            "pe_peso":     pe_peso,
-            "plan_peso":   plan_peso,
-            # Totais
-            "total_peso":    round(total_peso, 4),
-            "ganho_bu":      round(ganho_bu, 2),
-            "potencial_bu":  round(potencial_bu, 2),
+            "fat_atual":       round(fat_atual, 2),
+            "fat_pct":         round(fat_pct, 1),
+            "fat_peso":        round(fat_peso, 4),
+            "ponto_extra":     ponto_extra,
+            "planograma":      planograma,
+            "pe_peso":         pe_peso,
+            "plan_peso":       plan_peso,
+            "total_peso":      round(total_peso, 4),
+            "ganho_bu":        round(ganho_bu, 2),
+            "potencial_bu":    round(potencial_bu, 2),
         })
 
     return {
         "mes": mes,
         "ano": ano,
+        "ano_anterior": ano_anterior,
+        "crescimento_pct": int((META_CRESCIMENTO - 1) * 100),
         "ponto_extra": ponto_extra,
         "planograma":  planograma,
         "bus": resultado,
-        "total_ganho":    round(total_ganho, 2),
+        "total_ganho":     round(total_ganho, 2),
         "total_potencial": round(total_potencial, 2),
     }
 
 
 # ── Endpoints Admin ────────────────────────────────────────────────────────────
-
-class MetaFatInput(BaseModel):
-    cd_secao: str
-    mes: int
-    ano: int
-    meta_fat: float
-
-
-@router.get("/admin/programa-metas")
-def get_programa_metas(
-    authorization: str = Header(None),
-    mes: int = Query(...),
-    ano: int = Query(...),
-):
-    _check_admin(authorization)
-    db = get_db()
-    rows = db.execute(
-        "SELECT cd_secao, meta_fat FROM programa_meta_fat WHERE mes=? AND ano=?",
-        (mes, ano),
-    ).fetchall()
-    db.close()
-    return {r["cd_secao"]: r["meta_fat"] for r in rows}
-
-
-@router.post("/admin/programa-metas")
-def set_programa_meta(body: MetaFatInput, authorization: str = Header(None)):
-    _check_admin(authorization)
-    db = get_db()
-    db.execute(
-        """INSERT INTO programa_meta_fat (cd_secao, mes, ano, meta_fat)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT(cd_secao, mes, ano) DO UPDATE SET meta_fat=excluded.meta_fat""",
-        (body.cd_secao, body.mes, body.ano, body.meta_fat),
-    )
-    db.commit()
-    db.close()
-    return {"ok": True}
-
 
 class ExecucaoInput(BaseModel):
     cnpj_raiz:   str

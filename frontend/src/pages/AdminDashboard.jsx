@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaMetas, adminSetProgramaMeta, adminGetProgramaExecucao, adminSetProgramaExecucao } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -469,41 +469,12 @@ const BU_LABELS_P = { LMP_CASA: 'HC · Home Care', AL_NUT: 'NT · Nutrição', L
 
 function ProgramaAdmin({ token, clientes, periodo }) {
   const { mes, ano } = periodo
-  const [metasFat, setMetasFat] = useState({})
   const [execucao, setExecucao] = useState({})
-  const [savingMeta, setSavingMeta] = useState({})
   const [savingExec, setSavingExec] = useState({})
-  const [msgMeta, setMsgMeta] = useState({})
 
   useEffect(() => {
-    Promise.all([
-      adminGetProgramaMetas(token, mes, ano),
-      adminGetProgramaExecucao(token, mes, ano),
-    ]).then(([rMeta, rExec]) => {
-      const fat = {}
-      BU_PROGRAMA.forEach(bu => { fat[bu] = rMeta.data[bu] ? String(rMeta.data[bu]) : '' })
-      setMetasFat(fat)
-      setExecucao(rExec.data)
-    })
+    adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data))
   }, [mes, ano])
-
-  const salvarMeta = async (cd_secao) => {
-    const val = parseFloat(String(metasFat[cd_secao] || '').replace(',', '.'))
-    if (isNaN(val) || val <= 0) {
-      setMsgMeta(m => ({ ...m, [cd_secao]: { tipo: 'erro', txt: 'Valor inválido' } }))
-      return
-    }
-    setSavingMeta(s => ({ ...s, [cd_secao]: true }))
-    try {
-      await adminSetProgramaMeta(token, { cd_secao, mes, ano, meta_fat: val })
-      setMsgMeta(m => ({ ...m, [cd_secao]: { tipo: 'ok', txt: 'Salvo!' } }))
-      setTimeout(() => setMsgMeta(m => ({ ...m, [cd_secao]: null })), 2000)
-    } catch {
-      setMsgMeta(m => ({ ...m, [cd_secao]: { tipo: 'erro', txt: 'Erro' } }))
-    } finally {
-      setSavingMeta(s => ({ ...s, [cd_secao]: false }))
-    }
-  }
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -519,42 +490,8 @@ function ProgramaAdmin({ token, clientes, periodo }) {
 
   return (
     <div className="space-y-6">
-      {/* ── Metas de Faturamento por BU ──────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-800 mb-4">
-          Meta de Faturamento por BU — {MESES[mes - 1]} {ano}
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Valor em R$ que serve de base para calcular o ganho de cada pilar. Aplica-se a todos os clientes ponderada.
-        </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {BU_PROGRAMA.map(bu => {
-            const m = msgMeta[bu]
-            return (
-              <div key={bu} className="space-y-2">
-                <label className="text-xs font-semibold text-gray-600">{BU_LABELS_P[bu]}</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="R$ 0"
-                    value={metasFat[bu] || ''}
-                    onChange={e => setMetasFat(f => ({ ...f, [bu]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && salvarMeta(bu)}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] min-w-0"
-                  />
-                  <button onClick={() => salvarMeta(bu)}
-                    disabled={savingMeta[bu]}
-                    className="bg-[#1e3a5f] hover:bg-[#162d4a] text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50">
-                    {savingMeta[bu] ? '...' : 'OK'}
-                  </button>
-                </div>
-                {m && (
-                  <p className={`text-xs ${m.tipo === 'ok' ? 'text-emerald-600' : 'text-red-500'}`}>{m.txt}</p>
-                )}
-              </div>
-            )
-          })}
-        </div>
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 text-sm text-blue-700">
+        A meta de faturamento é calculada automaticamente: faturamento do mesmo mês de {ano - 1} + 15% por BU, individualmente para cada cliente.
       </div>
 
       {/* ── Ponto Extra e Planograma por cliente ─────────────────────────── */}

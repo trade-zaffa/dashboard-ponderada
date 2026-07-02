@@ -142,6 +142,11 @@ function BUCard({ bu, data }) {
                 <p className="text-[10px] text-gray-400 mt-0.5">
                   {fmtFull(data.fat_atual)} de {fmtFull(data.meta_fat)} meta · {data.fat_pct}% atingido
                 </p>
+                {data.fat_ano_anterior > 0 && (
+                  <p className="text-[10px] text-gray-300 mt-0.5">
+                    Base: {fmtFull(data.fat_ano_anterior)} ({new Date().getFullYear() - 1}) +15%
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className={`text-sm font-bold ${data.fat_peso > 0 ? 'text-amber-700' : 'text-gray-300'}`}>
