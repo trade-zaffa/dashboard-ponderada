@@ -110,23 +110,35 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
 
   const META_PCT = dados.crescimento_pct
 
+  const totalMetaFat = dados.bus.reduce((s, b) => s + b.meta_fat, 0)
+
   return (
     <div className="space-y-4">
       {/* KPIs do programa */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
-          <p className="text-[#c9a227] text-2xl font-bold">{fmtR(dados.total_ganho)}</p>
-          <p className="text-gray-400 text-xs mt-1">Ganho estimado</p>
+          <p className="text-gray-400 text-xs mb-1">Meta total (todas BUs)</p>
+          <p className="text-white text-xl font-bold">{fmtR(totalMetaFat)}</p>
+          <p className="text-gray-500 text-[10px] mt-1">base {periodo.ano - 1} + 15%</p>
         </div>
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
-          <p className="text-gray-300 text-2xl font-bold">{fmtR(dados.total_potencial)}</p>
-          <p className="text-gray-400 text-xs mt-1">Potencial máximo</p>
+          <p className="text-gray-400 text-xs mb-1">Potencial máximo (2,5%)</p>
+          <p className="text-gray-300 text-xl font-bold">{fmtR(dados.total_potencial)}</p>
+          <p className="text-gray-500 text-[10px] mt-1">= 2,5% × {fmtR(totalMetaFat)}</p>
         </div>
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
-          <p className={`text-2xl font-bold ${dados.ponto_extra && dados.planograma ? 'text-emerald-400' : 'text-amber-400'}`}>
+          <p className="text-gray-400 text-xs mb-1">Ganho estimado</p>
+          <p className="text-[#c9a227] text-xl font-bold">{fmtR(dados.total_ganho)}</p>
+          <p className="text-gray-500 text-[10px] mt-1">
+            {totalMetaFat > 0 ? (dados.total_ganho / totalMetaFat * 100).toFixed(2) : '0,00'}% da meta total
+          </p>
+        </div>
+        <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
+          <p className="text-gray-400 text-xs mb-1">Ponto Extra · Planograma</p>
+          <p className={`text-xl font-bold ${dados.ponto_extra && dados.planograma ? 'text-emerald-400' : 'text-amber-400'}`}>
             {dados.ponto_extra ? '✓' : '○'} PE &nbsp; {dados.planograma ? '✓' : '○'} Plan.
           </p>
-          <p className="text-gray-400 text-xs mt-1">Ponto Extra · Planograma</p>
+          <p className="text-gray-500 text-[10px] mt-1">0,50% cada</p>
         </div>
       </div>
 
@@ -718,7 +730,10 @@ function ProgramaAdmin({ token, clientes, periodo }) {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-lg font-bold text-[#c9a227]">{fmtR(r.total_ganho)}</p>
-                      <p className="text-xs text-gray-400">{r.ating_pct}% do potencial</p>
+                      <p className="text-xs text-gray-400">
+                        potencial: {fmtR(r.total_potencial)} <span className="text-gray-300">({r.ating_pct}%)</span>
+                      </p>
+                      <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_meta_fat)}</p>
                     </div>
                   </div>
 
