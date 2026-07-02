@@ -14,6 +14,7 @@ export const getSortimento = (cd_cliens, n_lojas, periodo = {}) =>
 export const getFaturamento = (cd_cliens) =>
   api.get('/faturamento', { params: { cd_cliens: cd_cliens.join(',') } })
 
+
 export const getPedidosAbertos = (cd_cliens) =>
   api.get('/pedidos-abertos', { params: { cd_cliens: cd_cliens.join(',') } })
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Portfolio from '../components/Portfolio'
+import FaturamentoDashboard from '../components/FaturamentoDashboard'
 
 const MESES_FULL = [
   'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -8,7 +9,13 @@ const MESES_FULL = [
 
 const hoje = new Date()
 
+const TABS = [
+  { key: 'portfolio', label: 'Portfólio' },
+  { key: 'faturamento', label: 'Faturamento' },
+]
+
 export default function Dashboard({ session, onLogout }) {
+  const [tab, setTab] = useState('portfolio')
   const [periodo, setPeriodo] = useState({
     mes: hoje.getMonth() + 1,
     ano: hoje.getFullYear(),
@@ -45,22 +52,38 @@ export default function Dashboard({ session, onLogout }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Seletor de período */}
-            <div className="flex items-center gap-1 bg-white/10 rounded-xl px-3 py-1.5">
-              <button onClick={mesAnterior}
-                className="text-blue-200 hover:text-white transition-colors w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-lg leading-none">
-                ‹
-              </button>
-              <span className="text-sm font-medium min-w-[130px] text-center">
-                {MESES_FULL[periodo.mes - 1]} {periodo.ano}
-              </span>
-              <button onClick={mesProximo} disabled={isAtual}
-                className={`w-6 h-6 flex items-center justify-center rounded text-lg leading-none transition-colors ${
-                  isAtual ? 'text-white/25 cursor-not-allowed' : 'text-blue-200 hover:text-white hover:bg-white/10'
-                }`}>
-                ›
-              </button>
+            {/* Tabs */}
+            <div className="flex bg-white/10 rounded-xl p-1 gap-1">
+              {TABS.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`text-sm px-3 py-1 rounded-lg font-medium transition-all ${
+                    tab === t.key
+                      ? 'bg-white text-[#1e3a5f]'
+                      : 'text-white/70 hover:text-white'
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
             </div>
+
+            {/* Seletor de período — só no portfólio */}
+            {tab === 'portfolio' && (
+              <div className="flex items-center gap-1 bg-white/10 rounded-xl px-3 py-1.5">
+                <button onClick={mesAnterior}
+                  className="text-blue-200 hover:text-white transition-colors w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-lg leading-none">
+                  ‹
+                </button>
+                <span className="text-sm font-medium min-w-[130px] text-center">
+                  {MESES_FULL[periodo.mes - 1]} {periodo.ano}
+                </span>
+                <button onClick={mesProximo} disabled={isAtual}
+                  className={`w-6 h-6 flex items-center justify-center rounded text-lg leading-none transition-colors ${
+                    isAtual ? 'text-white/25 cursor-not-allowed' : 'text-blue-200 hover:text-white hover:bg-white/10'
+                  }`}>
+                  ›
+                </button>
+              </div>
+            )}
 
             <button onClick={onLogout}
               className="text-blue-200 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
@@ -75,7 +98,8 @@ export default function Dashboard({ session, onLogout }) {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <Portfolio session={session} periodo={periodo} />
+        {tab === 'portfolio'    && <Portfolio session={session} periodo={periodo} />}
+        {tab === 'faturamento'  && <FaturamentoDashboard session={session} />}
       </main>
     </div>
   )
