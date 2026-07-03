@@ -16,7 +16,10 @@ const TABS = [
   { key: 'programa', label: 'Programa' },
 ]
 
-export default function Dashboard({ session, onLogout }) {
+const CAMPANHA_MES = 7
+const CAMPANHA_ANO = 2026
+
+export default function Dashboard({ session, onLogout, isAdmin = false }) {
   const [tab, setTab] = useState('portfolio')
   const [periodo, setPeriodo] = useState({
     mes: hoje.getMonth() + 1,
@@ -24,9 +27,10 @@ export default function Dashboard({ session, onLogout }) {
   })
 
   const mesAnterior = () => {
-    setPeriodo(p =>
-      p.mes === 1 ? { mes: 12, ano: p.ano - 1 } : { ...p, mes: p.mes - 1 }
-    )
+    const novoMes = periodo.mes === 1 ? 12 : periodo.mes - 1
+    const novoAno = periodo.mes === 1 ? periodo.ano - 1 : periodo.ano
+    if (!isAdmin && (novoAno < CAMPANHA_ANO || (novoAno === CAMPANHA_ANO && novoMes < CAMPANHA_MES))) return
+    setPeriodo({ mes: novoMes, ano: novoAno })
   }
 
   const mesProximo = () => {
@@ -72,7 +76,12 @@ export default function Dashboard({ session, onLogout }) {
             {tab === 'portfolio' && (
               <div className="flex items-center gap-1 bg-white/10 rounded-xl px-3 py-1.5">
                 <button onClick={mesAnterior}
-                  className="text-blue-200 hover:text-white transition-colors w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-lg leading-none">
+                  disabled={!isAdmin && (periodo.ano < CAMPANHA_ANO || (periodo.ano === CAMPANHA_ANO && periodo.mes <= CAMPANHA_MES))}
+                  className={`w-6 h-6 flex items-center justify-center rounded text-lg leading-none transition-colors ${
+                    !isAdmin && (periodo.ano < CAMPANHA_ANO || (periodo.ano === CAMPANHA_ANO && periodo.mes <= CAMPANHA_MES))
+                      ? 'text-white/25 cursor-not-allowed'
+                      : 'text-blue-200 hover:text-white hover:bg-white/10'
+                  }`}>
                   ‹
                 </button>
                 <span className="text-sm font-medium min-w-[130px] text-center">
