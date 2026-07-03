@@ -179,12 +179,18 @@ export default function Portfolio({ session, periodo }) {
   // ── Seleção helpers ───────────────────────────────────────────────────────────
   const toggleItem = ean => setSel(prev => { const n = new Set(prev); n.has(ean) ? n.delete(ean) : n.add(ean); return n })
 
-  // Selecionar todos de uma BU (de TODOS os itens, não só filtrados)
+  // Selecionar todos de uma BU para pedido de compra
+  // Por padrão: pendente + em_progresso. Nunca Comprou só se o filtro de status for explicitamente esse.
+  const STATUS_PEDIDO = ['pendente', 'em_progresso']
   const selecionarBU = buKey => {
-    // respeita filtro de status e busca ativos, mas ignora filtro de BU (para poder selecionar múltiplas BUs)
     const eansDoBU = itens.filter(i => {
       if (i.cd_secao.trim() !== buKey) return false
-      if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
+      // Se há filtro de status explícito, respeita. Senão, exclui positivado e nunca_comprou.
+      if (filtroStatus !== 'ALL') {
+        if (i.status !== filtroStatus) return false
+      } else {
+        if (!STATUS_PEDIDO.includes(i.status)) return false
+      }
       if (busca) {
         const q = busca.toLowerCase()
         if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
