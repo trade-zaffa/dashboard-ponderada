@@ -72,3 +72,9 @@ export const adminSetProgramaExecucao = (token, body) =>
 
 export const adminGetProgramaResumo = (token, mes, ano) =>
   api.get('/admin/programa-resumo', { ...adminHeaders(token), params: { mes, ano } })
+
+export const adminGetPedidosAbertosMes = (token) =>
+  api.get('/admin/pedidos-abertos-mes', adminHeaders(token))
+
+export const adminGetPedidosFaturadosMes = (token) =>
+  api.get('/admin/pedidos-faturados-mes', adminHeaders(token))

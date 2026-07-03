@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -878,6 +878,215 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
   )
 }
 
+// ─── Pedidos Admin ────────────────────────────────────────────────────────────
+const BU_LABEL_P = { LMP_CASA: 'HC', AL_NUT: 'NT', LMP_CUPE: 'PC', HGPER_BB: 'BW' }
+const BU_COR_P   = { LMP_CASA: '#3b82f6', AL_NUT: '#22c55e', LMP_CUPE: '#ec4899', HGPER_BB: '#a855f7' }
+
+function PedidosAdmin({ token }) {
+  const [subTab, setSubTab] = useState('abertos')
+  const [dadosAbertos, setDadosAbertos] = useState(null)
+  const [dadosFaturados, setDadosFaturados] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    setErro('')
+    Promise.all([
+      adminGetPedidosAbertosMes(token),
+      adminGetPedidosFaturadosMes(token),
+    ]).then(([ra, rf]) => {
+      setDadosAbertos(ra.data)
+      setDadosFaturados(rf.data)
+    }).catch(e => setErro(e.response?.data?.detail || 'Erro ao carregar pedidos'))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  const fmtR = v => v == null ? 'R$ 0' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const downloadXLSX = (dados, nome, colunas) => {
+    const ws = XLSX.utils.json_to_sheet(dados.map(r => {
+      const obj = {}
+      colunas.forEach(([key, label]) => { obj[label] = r[key] })
+      return obj
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, nome.slice(0, 31))
+    XLSX.writeFile(wb, `${nome}.xlsx`)
+  }
+
+  const downloadCSV = (dados, nome, colunas) => {
+    const header = colunas.map(([, l]) => `"${l}"`).join(';')
+    const linhas = dados.map(r =>
+      colunas.map(([k]) => {
+        const v = r[k]
+        if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`
+        return v ?? ''
+      }).join(';')
+    )
+    const csv = [header, ...linhas].join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `${nome}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
+  const colsAbertos = [
+    ['cliente', 'Cliente'], ['nu_ped', 'Pedido'], ['dt_pedido', 'Data'],
+    ['cd_secao', 'BU'], ['ean', 'EAN'], ['produto', 'Produto'],
+    ['qtde_cx', 'Qtde CX'], ['total_un', 'Total UN'], ['valor_item', 'Valor (R$)'], ['etapa', 'Etapa'],
+  ]
+  const colsFaturados = [
+    ['cliente', 'Cliente'], ['nu_nf', 'NF'], ['dt_emissao', 'Emissão'],
+    ['cd_secao', 'BU'], ['ean', 'EAN'], ['produto', 'Produto'],
+    ['qtde_liquida', 'Qtde Líq.'], ['valor_liquido', 'Valor Líq. (R$)'],
+  ]
+
+  // Resumo agrupado por cliente para exibição
+  const resumoAbertos = useMemo(() => {
+    if (!dadosAbertos) return []
+    const map = {}
+    dadosAbertos.forEach(r => {
+      if (!map[r.cliente]) map[r.cliente] = { cliente: r.cliente, pedidos: new Set(), valor: 0, buMap: {} }
+      map[r.cliente].pedidos.add(r.nu_ped)
+      map[r.cliente].valor += r.valor_item
+      if (!map[r.cliente].buMap[r.cd_secao]) map[r.cliente].buMap[r.cd_secao] = 0
+      map[r.cliente].buMap[r.cd_secao] += r.valor_item
+    })
+    return Object.values(map).sort((a, b) => b.valor - a.valor).map(m => ({
+      ...m, qtd_pedidos: m.pedidos.size
+    }))
+  }, [dadosAbertos])
+
+  const resumoFaturados = useMemo(() => {
+    if (!dadosFaturados) return []
+    const map = {}
+    dadosFaturados.forEach(r => {
+      if (!map[r.cliente]) map[r.cliente] = { cliente: r.cliente, notas: new Set(), valor: 0, buMap: {} }
+      map[r.cliente].notas.add(r.nu_nf)
+      map[r.cliente].valor += r.valor_liquido
+      if (!map[r.cliente].buMap[r.cd_secao]) map[r.cliente].buMap[r.cd_secao] = 0
+      map[r.cliente].buMap[r.cd_secao] += r.valor_liquido
+    })
+    return Object.values(map).sort((a, b) => b.valor - a.valor).map(m => ({
+      ...m, qtd_notas: m.notas.size
+    }))
+  }, [dadosFaturados])
+
+  const totalAbertos  = resumoAbertos.reduce((s, r) => s + r.valor, 0)
+  const totalFaturado = resumoFaturados.reduce((s, r) => s + r.valor, 0)
+
+  if (loading) return (
+    <div className="flex items-center gap-2 py-16 text-gray-400 justify-center">
+      <div className="w-5 h-5 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+      Carregando pedidos...
+    </div>
+  )
+  if (erro) return <p className="text-red-500 text-sm py-4">{erro}</p>
+
+  const dados    = subTab === 'abertos' ? dadosAbertos    : dadosFaturados
+  const colunas  = subTab === 'abertos' ? colsAbertos     : colsFaturados
+  const resumo   = subTab === 'abertos' ? resumoAbertos   : resumoFaturados
+  const total    = subTab === 'abertos' ? totalAbertos    : totalFaturado
+  const nomeDL   = subTab === 'abertos' ? 'Pedidos_Abertos' : 'Pedidos_Faturados'
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tabs + download */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          {[['abertos', 'Em Aberto'], ['faturados', 'Faturado']].map(([id, label]) => (
+            <button key={id} onClick={() => setSubTab(id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                subTab === id ? 'bg-[#1e3a5f] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {dados && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => downloadCSV(dados, nomeDL, colunas)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              CSV
+            </button>
+            <button
+              onClick={() => downloadXLSX(dados, nomeDL, colunas)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              XLSX
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Total */}
+      {dados && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+            <p className="text-2xl font-bold text-[#1e3a5f]">{resumo.length}</p>
+            <p className="text-xs text-gray-400 mt-1">Clientes</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+            <p className="text-2xl font-bold text-[#1e3a5f]">
+              {subTab === 'abertos'
+                ? resumo.reduce((s, r) => s + r.qtd_pedidos, 0)
+                : resumo.reduce((s, r) => s + r.qtd_notas, 0)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">{subTab === 'abertos' ? 'Pedidos' : 'Notas Fiscais'}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+            <p className="text-2xl font-bold text-emerald-600">{fmtR(total)}</p>
+            <p className="text-xs text-gray-400 mt-1">Total {subTab === 'abertos' ? 'em aberto' : 'faturado'}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tabela por cliente */}
+      {resumo.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {subTab === 'abertos' ? 'Pedidos em Aberto — Mês Atual' : 'Faturamento — Mês Atual'}
+            </p>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {resumo.map(r => (
+              <div key={r.cliente} className="px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-gray-800 text-sm">{r.cliente}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {subTab === 'abertos'
+                        ? `${r.qtd_pedidos} pedido${r.qtd_pedidos !== 1 ? 's' : ''}`
+                        : `${r.qtd_notas} NF${r.qtd_notas !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                  <p className="font-bold text-gray-700">{fmtR(r.valor)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(r.buMap).sort((a,b) => b[1]-a[1]).map(([bu, val]) => (
+                    <span key={bu} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                      style={{ backgroundColor: BU_COR_P[bu] || '#6b7280' }}>
+                      {BU_LABEL_P[bu] || bu} · {fmtR(val)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Gerenciamento de Senhas ───────────────────────────────────────────────────
 function SenhasAdmin({ token, clientes }) {
   const [senhasSet, setSenhasSet] = useState(new Set())
@@ -1148,7 +1357,7 @@ export default function AdminDashboard({ token, onLogout }) {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 flex gap-1 pb-0">
-          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
+          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['pedidos', '📦 Pedidos'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${tab === id ? 'bg-gray-50 text-[#1e3a5f]' : 'text-blue-200 hover:text-white hover:bg-white/10'}`}>
               {label}
@@ -1276,6 +1485,10 @@ export default function AdminDashboard({ token, onLogout }) {
 
         {tab === 'programa' && (
           <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} />
+        )}
+
+        {tab === 'pedidos' && (
+          <PedidosAdmin token={token} />
         )}
 
         {tab === 'senhas' && (
