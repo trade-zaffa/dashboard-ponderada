@@ -119,7 +119,7 @@ export default function Portfolio({ session, periodo }) {
   const [metasBU, setMetasBU] = useState({}) // { cd_secao: meta_eans }
 
   const [filtroStatus, setFiltroStatus] = useState('ALL')
-  const [filtroBU, setFiltroBU] = useState('ALL')
+  const [filtroBU, setFiltroBU] = useState(new Set()) // Set vazio = todas as BUs
   const [busca, setBusca] = useState('')
 
   // Seleção como Set de EANs
@@ -135,7 +135,7 @@ export default function Portfolio({ session, periodo }) {
     setData(null)
     setSel(new Set())
     setFiltroStatus('ALL')
-    setFiltroBU('ALL')
+    setFiltroBU(new Set())
     setBusca('')
     setVista('lista')
     Promise.all([
@@ -168,7 +168,7 @@ export default function Portfolio({ session, periodo }) {
 
   const itensFiltrados = useMemo(() => itens.filter(i => {
     if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
-    if (filtroBU !== 'ALL' && i.cd_secao.trim() !== filtroBU) return false
+    if (filtroBU.size > 0 && !filtroBU.has(i.cd_secao.trim())) return false
     if (busca) {
       const q = busca.toLowerCase()
       if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
@@ -210,9 +210,15 @@ export default function Portfolio({ session, periodo }) {
   const todosFiltradosSel = itensFiltrados.length > 0 && itensFiltrados.every(i => sel.has(i.ean))
   const algumFiltradoSel = itensFiltrados.some(i => sel.has(i.ean))
 
-  const temFiltro = filtroStatus !== 'ALL' || filtroBU !== 'ALL' || busca !== ''
+  const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || busca !== ''
 
-  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU('ALL'); setBusca('') }
+  const toggleBU = bu => setFiltroBU(prev => {
+    const n = new Set(prev)
+    n.has(bu) ? n.delete(bu) : n.add(bu)
+    return n
+  })
+
+  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU(new Set()); setBusca('') }
 
   // Contagem de selecionados por BU
   const selPorBU = useMemo(() => {
@@ -249,8 +255,8 @@ export default function Portfolio({ session, periodo }) {
               key={bu}
               buKey={bu}
               stats={statsBU[bu]}
-              ativo={filtroBU === bu}
-              onFiltrar={() => setFiltroBU(filtroBU === bu ? 'ALL' : bu)}
+              ativo={filtroBU.has(bu)}
+              onFiltrar={() => toggleBU(bu)}
               meta={metasBU[bu]}
             />
           ) : null
@@ -293,8 +299,8 @@ export default function Portfolio({ session, periodo }) {
         {/* BU: pills + botão ⊕ para selecionar todos da BU */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-gray-400 w-14 flex-shrink-0">BU</span>
-          <button onClick={() => setFiltroBU('ALL')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${filtroBU === 'ALL' ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+          <button onClick={() => setFiltroBU(new Set())}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${filtroBU.size === 0 ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
             Todas
           </button>
           {Object.entries(BU).map(([key, cfg]) => {
@@ -302,12 +308,13 @@ export default function Portfolio({ session, periodo }) {
             const qtdSel = selPorBU[key] || 0
             const totalBU = statsBU[key]?.total || 0
             const todosSelBU = qtdSel === totalBU && totalBU > 0
+            const ativoBU = filtroBU.has(key)
             return (
               <div key={key} className="flex items-center gap-0.5">
                 <button
-                  onClick={() => setFiltroBU(filtroBU === key ? 'ALL' : key)}
-                  className={`px-3 py-1.5 rounded-l-full text-xs font-medium border-y border-l transition-colors ${filtroBU === key ? 'text-white border-transparent' : `${cfg.badge} border-transparent hover:opacity-80`}`}
-                  style={filtroBU === key ? { backgroundColor: cfg.cor, borderColor: cfg.cor } : {}}
+                  onClick={() => toggleBU(key)}
+                  className={`px-3 py-1.5 rounded-l-full text-xs font-medium border-y border-l transition-colors ${ativoBU ? 'text-white border-transparent' : `${cfg.badge} border-transparent hover:opacity-80`}`}
+                  style={ativoBU ? { backgroundColor: cfg.cor, borderColor: cfg.cor } : {}}
                 >
                   {cfg.short} · {statsBU[key]?.positivado}/{statsBU[key]?.total}
                 </button>
@@ -316,8 +323,8 @@ export default function Portfolio({ session, periodo }) {
                   title={todosSelBU ? `Desmarcar todos de ${cfg.label}` : `Selecionar todos de ${cfg.label}`}
                   className={`px-2 py-1.5 rounded-r-full border-y border-r text-xs font-bold transition-all ${
                     todosSelBU ? 'text-white' : qtdSel > 0 ? 'text-white' : 'text-gray-500 hover:text-gray-700'
-                  } ${filtroBU === key ? 'border-transparent' : `${cfg.borda} border`}`}
-                  style={qtdSel > 0 ? { backgroundColor: cfg.cor, borderColor: cfg.cor } : filtroBU === key ? { backgroundColor: cfg.cor + '40', borderColor: 'transparent' } : {}}
+                  } ${ativoBU ? 'border-transparent' : `${cfg.borda} border`}`}
+                  style={qtdSel > 0 ? { backgroundColor: cfg.cor, borderColor: cfg.cor } : ativoBU ? { backgroundColor: cfg.cor + '40', borderColor: 'transparent' } : {}}
                 >
                   {qtdSel > 0 ? qtdSel : '⊕'}
                 </button>
@@ -383,13 +390,14 @@ export default function Portfolio({ session, periodo }) {
                 onRemove={() => setFiltroStatus('ALL')}
               />
             )}
-            {filtroBU !== 'ALL' && (
+            {[...filtroBU].map(bu => (
               <FilterChip
-                label={BU[filtroBU]?.label}
-                cor={BU[filtroBU]?.cor}
-                onRemove={() => setFiltroBU('ALL')}
+                key={bu}
+                label={BU[bu]?.label}
+                cor={BU[bu]?.cor}
+                onRemove={() => toggleBU(bu)}
               />
-            )}
+            ))}
             {busca && (
               <FilterChip
                 label={`"${busca}"`}
