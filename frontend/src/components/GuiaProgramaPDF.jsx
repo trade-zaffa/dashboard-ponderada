@@ -534,6 +534,60 @@ export default function abrirGuiaPrograma(nomeCliente) {
         </div>
       </div>
 
+      <!-- COMO USAR O PORTFOLIO -->
+      <div class="section-block">
+        <p class="section-title">Como Usar o Portfólio do Dashboard</p>
+        <div style="border:1.5px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+
+          <!-- Passo 1 -->
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 15px; border-bottom:1px solid #f1f5f9;">
+            <div style="width:26px; height:26px; border-radius:50%; background:#1e3a5f; color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">1</div>
+            <div>
+              <p style="font-size:11.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">Selecione a aba Portfólio</p>
+              <p style="font-size:10.5px; color:#475569; line-height:1.55;">No topo do dashboard, clique em <strong>Portfólio</strong>. Você verá os cards resumo de cada BU (HC, NT, PC, BW) com o percentual de produtos positivados e a meta de EANs.</p>
+            </div>
+          </div>
+
+          <!-- Passo 2 -->
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 15px; border-bottom:1px solid #f1f5f9;">
+            <div style="width:26px; height:26px; border-radius:50%; background:#2563eb; color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">2</div>
+            <div>
+              <p style="font-size:11.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">Filtre por Status (opcional)</p>
+              <p style="font-size:10.5px; color:#475569; line-height:1.55;">Na barra de filtros, clique no status desejado — <strong>Pendente</strong> (nunca atingiu o mínimo no mês) ou <strong>Em Progresso</strong> (comprou mas ainda abaixo do mínimo). Use isso para focar na lista de produtos que precisam de ação.</p>
+            </div>
+          </div>
+
+          <!-- Passo 3 -->
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 15px; border-bottom:1px solid #f1f5f9;">
+            <div style="width:26px; height:26px; border-radius:50%; background:#0284c7; color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">3</div>
+            <div>
+              <p style="font-size:11.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">Selecione os produtos via botão ⊕</p>
+              <p style="font-size:10.5px; color:#475569; line-height:1.55;">Ao lado de cada BU na barra de filtros há um botão <strong>⊕</strong>. Clicando nele, todos os produtos <strong>Pendentes e Em Progresso</strong> daquela BU são selecionados automaticamente. Você pode clicar ⊕ em múltiplas BUs ao mesmo tempo — por exemplo BW e PC — para montar o pedido de várias BUs de uma vez.</p>
+              <p style="font-size:10px; color:#94a3b8; margin-top:4px;">Dica: se quiser incluir produtos "Nunca Comprou", filtre por esse status antes de clicar ⊕.</p>
+            </div>
+          </div>
+
+          <!-- Passo 4 -->
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 15px; border-bottom:1px solid #f1f5f9;">
+            <div style="width:26px; height:26px; border-radius:50%; background:#0891b2; color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">4</div>
+            <div>
+              <p style="font-size:11.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">Gere o Pedido ou Relatório de Cadastro</p>
+              <p style="font-size:10.5px; color:#475569; line-height:1.55;">Com os produtos selecionados, aparece uma barra flutuante no rodapé da tela com a contagem por BU. Clique em <strong>Gerar Pedido</strong> para visualizar a sugestão de compra com quantidades e caixas, ou em <strong>Cadastro</strong> para listar os produtos que o cliente ainda nunca comprou e precisa solicitar inclusão.</p>
+            </div>
+          </div>
+
+          <!-- Passo 5 -->
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 15px;">
+            <div style="width:26px; height:26px; border-radius:50%; background:#16a34a; color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">5</div>
+            <div>
+              <p style="font-size:11.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">Acompanhe o Programa mês a mês</p>
+              <p style="font-size:10.5px; color:#475569; line-height:1.55;">Na aba <strong>Programa</strong>, veja em tempo real o ganho estimado por BU, o percentual de sortimento e faturamento atingidos, e a situação de Ponto Extra e Planograma. Na aba <strong>Faturamento</strong>, acompanhe o valor faturado no mês atual versus a meta — e quanto falta para atingi-la em cada BU.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <!-- CHECKLIST -->
       <div class="section-block">
         <p class="section-title">Como Maximizar Seu Retorno</p>
