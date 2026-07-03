@@ -228,7 +228,11 @@ function BUCard({ bu, data }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function ProgramaDashboard({ session }) {
+// Início da campanha — clientes não podem ver períodos anteriores
+const CAMPANHA_MES = 7
+const CAMPANHA_ANO = 2026
+
+export default function ProgramaDashboard({ session, isAdmin = false }) {
   const hoje = new Date()
   // Abre no último mês completo (mês atual tem poucos dados nos primeiros dias)
   const mesInicial = hoje.getDate() <= 5
@@ -254,12 +258,16 @@ export default function ProgramaDashboard({ session }) {
 
   useEffect(() => { carregar(mes, ano) }, [mes, ano])
 
+  const antesInicio = (m, a) =>
+    a < CAMPANHA_ANO || (a === CAMPANHA_ANO && m < CAMPANHA_MES)
+
   const mudarMes = (delta) => {
     let nm = mes + delta, na = ano
     if (nm < 1) { nm = 12; na-- }
     if (nm > 12) { nm = 1; na++ }
     const ehFuturo = na > hoje.getFullYear() || (na === hoje.getFullYear() && nm > hoje.getMonth() + 1)
     if (ehFuturo) return
+    if (!isAdmin && antesInicio(nm, na)) return
     setMes(nm); setAno(na)
   }
 
@@ -300,7 +308,8 @@ export default function ProgramaDashboard({ session }) {
         </button>
         <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
           <button onClick={() => mudarMes(-1)}
-            className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-700 text-lg">‹</button>
+            disabled={!isAdmin && antesInicio(mes === 1 ? 12 : mes - 1, mes === 1 ? ano - 1 : ano)}
+            className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 text-lg">‹</button>
           <span className="text-sm font-medium min-w-[140px] text-center text-gray-700">
             {MESES_FULL[mes - 1]} {ano}
           </span>
