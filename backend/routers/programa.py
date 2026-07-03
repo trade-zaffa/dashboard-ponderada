@@ -442,14 +442,17 @@ def get_programa_resumo(
             total_meta_fat  += meta_fat
 
             bus_detail.append({
-                "cd_secao":   bu,
-                "fat_atual":  round(fat_atual, 2),
-                "meta_fat":   round(meta_fat, 2),
-                "fat_pct":    round(fat_pct, 1),
-                "sort_pct":   round(sort_pct, 1),
-                "sort_peso":  sort_peso,
-                "fat_peso":   round(fat_peso, 4),
-                "ganho_bu":   round(ganho_bu, 2),
+                "cd_secao":        bu,
+                "fat_atual":       round(fat_atual, 2),
+                "meta_fat":        round(meta_fat, 2),
+                "fat_pct":         round(fat_pct, 1),
+                "sort_pct":        round(sort_pct, 1),
+                "sort_positivado": srt["positivado"],
+                "sort_total":      srt["total"],
+                "meta_eans":       meta_eans,
+                "sort_peso":       sort_peso,
+                "fat_peso":        round(fat_peso, 4),
+                "ganho_bu":        round(ganho_bu, 2),
             })
 
         fat_pct_total = min(100.0, (total_fat_atual / total_meta_fat * 100) if total_meta_fat > 0 else 0.0)

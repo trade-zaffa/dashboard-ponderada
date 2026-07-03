@@ -192,7 +192,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
                     </div>
                     <span className="text-sm font-bold text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
                     <span className="text-xs text-gray-400 text-right">
-                      {bu.sort_positivado} / {bu.sort_total} EANs
+                      {bu.sort_positivado} / {bu.meta_eans || bu.sort_total} EANs (meta)
                     </span>
                   </div>
 
@@ -641,7 +641,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
 const BU_PROGRAMA = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 const BU_LABELS_P = { LMP_CASA: 'HC · Home Care', AL_NUT: 'NT · Nutrição', LMP_CUPE: 'PC · Personal Care', HGPER_BB: 'BW · Beleza' }
 
-function ProgramaAdmin({ token, clientes, periodo }) {
+function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
   const { mes, ano } = periodo
   const [execucao, setExecucao] = useState({})
   const [savingExec, setSavingExec] = useState({})
@@ -728,12 +728,21 @@ function ProgramaAdmin({ token, clientes, periodo }) {
                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${r.planograma ? 'bg-teal-100 text-teal-600' : 'bg-gray-100 text-gray-300'}`}>Planograma {r.planograma ? '✓' : '○'}</span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
                       <p className="text-lg font-bold text-[#c9a227]">{fmtR(r.total_ganho)}</p>
                       <p className="text-xs text-gray-400">
                         potencial: {fmtR(r.total_potencial)} <span className="text-gray-300">({r.ating_pct}%)</span>
                       </p>
                       <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_meta_fat)}</p>
+                      {onSelecionarCliente && (() => {
+                        const cli = clientes.find(c => c.cnpj_raiz === r.cnpj_raiz)
+                        return cli ? (
+                          <button onClick={() => onSelecionarCliente(cli)}
+                            className="text-xs bg-[#1e3a5f] hover:bg-[#162d4a] text-white px-3 py-1 rounded-lg transition-colors mt-1">
+                            Ver detalhes
+                          </button>
+                        ) : null
+                      })()}
                     </div>
                   </div>
 
@@ -772,6 +781,11 @@ function ProgramaAdmin({ token, clientes, periodo }) {
                                   style={{ width: `${Math.min(100, bu.sort_pct)}%`, backgroundColor: sortColor }} />
                               </div>
                               <span className="text-[11px] font-semibold w-9 text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
+                              {bu.sort_positivado != null && (
+                                <span className="text-[10px] text-gray-400 hidden sm:block">
+                                  {bu.sort_positivado}/{bu.meta_eans || bu.sort_total}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1261,7 +1275,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'programa' && (
-          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} />
+          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} />
         )}
 
         {tab === 'senhas' && (
