@@ -181,7 +181,16 @@ export default function Portfolio({ session, periodo }) {
 
   // Selecionar todos de uma BU (de TODOS os itens, não só filtrados)
   const selecionarBU = buKey => {
-    const eansDoBU = itens.filter(i => i.cd_secao.trim() === buKey).map(i => i.ean)
+    // respeita filtro de status e busca ativos, mas ignora filtro de BU (para poder selecionar múltiplas BUs)
+    const eansDoBU = itens.filter(i => {
+      if (i.cd_secao.trim() !== buKey) return false
+      if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
+      if (busca) {
+        const q = busca.toLowerCase()
+        if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
+      }
+      return true
+    }).map(i => i.ean)
     setSel(prev => {
       const n = new Set(prev)
       const todosMarcados = eansDoBU.every(e => n.has(e))
