@@ -949,7 +949,7 @@ function PedidosAdmin({ token }) {
   const colsAbertos = [
     ['cliente', 'Cliente'], ['nu_ped', 'Pedido'], ['dt_pedido', 'Data'],
     ['cd_secao', 'BU'], ['ean', 'EAN'], ['produto', 'Produto'],
-    ['qtde_cx', 'Qtde CX'], ['total_un', 'Total UN'], ['valor_item', 'Valor (R$)'], ['etapa', 'Etapa'],
+    ['qtde_cx', 'Qtde'], ['unid_ped', 'Unidade Pedida'], ['total_un', 'Total UN'], ['valor_item', 'Valor (R$)'], ['etapa', 'Etapa'],
   ]
   const colsFaturados = [
     ['cliente', 'Cliente'], ['nu_nf', 'NF'], ['dt_emissao', 'Emissão'],

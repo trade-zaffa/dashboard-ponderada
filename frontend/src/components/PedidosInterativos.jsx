@@ -59,7 +59,7 @@ function ItemRow({ item }) {
         {buCfg && <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${buCfg.badge}`}>{buCfg.short}</span>}
       </td>
       <td className="px-3 py-2 text-center text-gray-600 font-mono">
-        {Number.isInteger(item.qtde_caixas) ? item.qtde_caixas : item.qtde_caixas.toFixed(1)} cx
+        {Number.isInteger(item.qtde_caixas) ? item.qtde_caixas : item.qtde_caixas.toFixed(1)} {(item.unid_ped || 'un').toLowerCase()}
       </td>
       <td className="px-3 py-2 text-center font-semibold text-gray-800">
         {item.total_unidades.toLocaleString('pt-BR')}
@@ -173,7 +173,7 @@ function PedidoRow({ pedido, cdCliens, expandido, onToggle }) {
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-400">EAN</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-400">Produto</th>
                             <th className="px-3 py-2 text-center text-xs font-medium text-gray-400">BU</th>
-                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-400">Caixas</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-400">Qtde</th>
                             <th className="px-3 py-2 text-center text-xs font-medium text-gray-400">Unidades</th>
                             <th className="px-3 py-2 text-right text-xs font-medium text-gray-400">Total</th>
                           </tr>
