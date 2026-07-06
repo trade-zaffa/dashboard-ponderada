@@ -1,7 +1,14 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from database import get_connection
+import os
 
 router = APIRouter()
+
+
+def _verificar_admin(authorization: str):
+    senha = os.getenv("ADMIN_PASSWORD", "admin123")
+    if authorization != f"Bearer {senha}":
+        raise HTTPException(status_code=401, detail="Acesso não autorizado")
 
 
 def _vl_fat(alias='in2'):
@@ -220,6 +227,144 @@ def get_pedido_itens(nu_ped: int, cd_cliens: str = Query(...)):
             "total_unidades": r.total_unidades,
             "vl_unit": float(r.vl_unit) if r.vl_unit else 0.0,
             "valor_item": float(r.valor_item) if r.valor_item else 0.0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/admin/pedidos-abertos-mes")
+def admin_pedidos_abertos_mes(authorization: str = Header(None)):
+    """Pedidos em aberto do mês atual — todos os clientes Ponderada."""
+    _verificar_admin(authorization)
+
+    sql = """
+        SELECT
+            c.nome                                                         AS cliente,
+            pv.nu_ped,
+            CAST(pv.dt_cad AS DATE)                                        AS dt_pedido,
+            s.cd_secao,
+            p.cd_barra                                                     AS ean,
+            p.descricao                                                    AS produto,
+            ip.qtde                                                        AS qtde_cx,
+            CAST(ROUND(ip.qtde * ip.fator_est_ped, 0) AS INT)             AS total_un,
+            ROUND(ip.qtde * COALESCE(
+                ip.vl_unit_ped / NULLIF(ip.fator_est_ped, 0),
+                ip.vl_unit_ped
+            ), 2)                                                          AS valor_item,
+            (
+                SELECT STRING_AGG(ISNULL(f2.des_fila,'SEM FILA'), ' / ')
+                FROM evento e2
+                LEFT JOIN fila f2 ON f2.cd_fila = e2.cd_fila
+                WHERE e2.nu_ped = pv.nu_ped AND e2.cd_emp = pv.cd_emp AND e2.dt_encer IS NULL
+            )                                                              AS etapa
+        FROM ped_vda pv
+        JOIN it_pedv ip            ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+        JOIN produto p             ON p.cd_prod = ip.cd_prod
+        JOIN linha l               ON l.cd_linha = p.cd_linha
+        JOIN secao s               ON s.cd_secao = l.cd_secao
+        JOIN cliente c             ON c.cd_clien = pv.cd_clien
+        JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        WHERE csf.CdFabric = 'UNILEV'
+          AND csf.RamAtiv IN ('33  ','34  ')
+          AND c.ativo = 1
+          AND pv.cfop IN ('5101','5102','5405','5922','6102')
+          AND pv.situacao = 'AB'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND MONTH(pv.dt_cad) = MONTH(GETDATE())
+          AND YEAR(pv.dt_cad) = YEAR(GETDATE())
+        ORDER BY c.nome, pv.nu_ped, s.cd_secao
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return [
+        {
+            "cliente":    r.cliente.strip() if r.cliente else "",
+            "nu_ped":     r.nu_ped,
+            "dt_pedido":  str(r.dt_pedido),
+            "cd_secao":   r.cd_secao.strip(),
+            "ean":        r.ean or "",
+            "produto":    r.produto.strip() if r.produto else "",
+            "qtde_cx":    float(r.qtde_cx) if r.qtde_cx else 0.0,
+            "total_un":   int(r.total_un) if r.total_un else 0,
+            "valor_item": float(r.valor_item) if r.valor_item else 0.0,
+            "etapa":      r.etapa or "",
+        }
+        for r in rows
+    ]
+
+
+@router.get("/admin/pedidos-faturados-mes")
+def admin_pedidos_faturados_mes(authorization: str = Header(None)):
+    """Faturamento do mês atual — todos os clientes Ponderada."""
+    _verificar_admin(authorization)
+
+    sql = """
+        SELECT
+            c.nome                                                         AS cliente,
+            n.nu_nf,
+            CAST(n.dt_emis AS DATE)                                        AS dt_emissao,
+            s.cd_secao,
+            p.cd_barra                                                     AS ean,
+            p.descricao                                                    AS produto,
+            in2.qtde - ISNULL(in2.qtde_dev, 0)                            AS qtde_liquida,
+            ROUND(
+                CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
+                     ELSE in2.vl_tot_liquido * (in2.qtde - ISNULL(in2.qtde_dev,0))
+                          / NULLIF(in2.qtde, 0)
+                END
+            , 2)                                                           AS valor_liquido
+        FROM ped_vda pv
+        JOIN nota n            ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
+        JOIN it_nota in2       ON in2.nu_nf = n.nu_nf
+        JOIN produto p         ON p.cd_prod = in2.cd_prod
+        JOIN linha l           ON l.cd_linha = p.cd_linha
+        JOIN secao s           ON s.cd_secao = l.cd_secao
+        JOIN cliente c         ON c.cd_clien = pv.cd_clien
+        JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        WHERE csf.CdFabric = 'UNILEV'
+          AND csf.RamAtiv IN ('33  ','34  ')
+          AND c.ativo = 1
+          AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+          AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND MONTH(n.dt_emis) = MONTH(GETDATE())
+          AND YEAR(n.dt_emis) = YEAR(GETDATE())
+        ORDER BY c.nome, n.dt_emis DESC, s.cd_secao
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return [
+        {
+            "cliente":      r.cliente.strip() if r.cliente else "",
+            "nu_nf":        r.nu_nf,
+            "dt_emissao":   str(r.dt_emissao),
+            "cd_secao":     r.cd_secao.strip(),
+            "ean":          r.ean or "",
+            "produto":      r.produto.strip() if r.produto else "",
+            "qtde_liquida": float(r.qtde_liquida) if r.qtde_liquida else 0.0,
+            "valor_liquido": float(r.valor_liquido) if r.valor_liquido else 0.0,
         }
         for r in rows
     ]

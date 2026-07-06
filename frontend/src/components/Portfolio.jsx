@@ -179,18 +179,19 @@ export default function Portfolio({ session, periodo }) {
   // ── Seleção helpers ───────────────────────────────────────────────────────────
   const toggleItem = ean => setSel(prev => { const n = new Set(prev); n.has(ean) ? n.delete(ean) : n.add(ean); return n })
 
-  // Selecionar todos de uma BU para pedido de compra
-  // Por padrão: pendente + em_progresso. Nunca Comprou só se o filtro de status for explicitamente esse.
+  // Nunca comprou só entra na seleção via clique individual na linha.
+  // ⊕ e checkbox do cabeçalho só selecionam pendente + em_progresso (a menos que o filtro de status seja explicitamente outro).
   const STATUS_PEDIDO = ['pendente', 'em_progresso']
+
+  const isSelecionavel = (item) => {
+    if (filtroStatus !== 'ALL') return item.status === filtroStatus
+    return STATUS_PEDIDO.includes(item.status)
+  }
+
   const selecionarBU = buKey => {
     const eansDoBU = itens.filter(i => {
       if (i.cd_secao.trim() !== buKey) return false
-      // Se há filtro de status explícito, respeita. Senão, exclui positivado e nunca_comprou.
-      if (filtroStatus !== 'ALL') {
-        if (i.status !== filtroStatus) return false
-      } else {
-        if (!STATUS_PEDIDO.includes(i.status)) return false
-      }
+      if (!isSelecionavel(i)) return false
       if (busca) {
         const q = busca.toLowerCase()
         if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
@@ -199,19 +200,19 @@ export default function Portfolio({ session, periodo }) {
     }).map(i => i.ean)
     setSel(prev => {
       const n = new Set(prev)
-      const todosMarcados = eansDoBU.every(e => n.has(e))
+      const todosMarcados = eansDoBU.length > 0 && eansDoBU.every(e => n.has(e))
       if (todosMarcados) eansDoBU.forEach(e => n.delete(e))
       else eansDoBU.forEach(e => n.add(e))
       return n
     })
   }
 
-  // Toggle todos visíveis
+  // Toggle cabeçalho: respeita a mesma regra — nunca_comprou não entra a menos que explicitamente filtrado
   const toggleTodosVisiveis = () => {
-    const eans = itensFiltrados.map(i => i.ean)
+    const eans = itensFiltrados.filter(isSelecionavel).map(i => i.ean)
     setSel(prev => {
       const n = new Set(prev)
-      const todos = eans.every(e => n.has(e))
+      const todos = eans.length > 0 && eans.every(e => n.has(e))
       if (todos) eans.forEach(e => n.delete(e))
       else eans.forEach(e => n.add(e))
       return n
@@ -222,7 +223,8 @@ export default function Portfolio({ session, periodo }) {
   const itensSelOcultos = useMemo(() => itensSel.filter(i => !itensFiltrados.find(f => f.ean === i.ean)), [itensSel, itensFiltrados])
   const nuncaComprouSel = itensSel.filter(i => i.status === 'nunca_comprou')
 
-  const todosFiltradosSel = itensFiltrados.length > 0 && itensFiltrados.every(i => sel.has(i.ean))
+  const itensFiltradosSelecionaveis = itensFiltrados.filter(isSelecionavel)
+  const todosFiltradosSel = itensFiltradosSelecionaveis.length > 0 && itensFiltradosSelecionaveis.every(i => sel.has(i.ean))
   const algumFiltradoSel = itensFiltrados.some(i => sel.has(i.ean))
 
   const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || busca !== ''
@@ -321,8 +323,9 @@ export default function Portfolio({ session, periodo }) {
           {Object.entries(BU).map(([key, cfg]) => {
             if (!statsBU[key]) return null
             const qtdSel = selPorBU[key] || 0
-            const totalBU = statsBU[key]?.total || 0
-            const todosSelBU = qtdSel === totalBU && totalBU > 0
+            // Total selecionável desta BU (excluindo nunca_comprou quando sem filtro explícito)
+            const totalSelecionavel = itens.filter(i => i.cd_secao.trim() === key && isSelecionavel(i)).length
+            const todosSelBU = totalSelecionavel > 0 && qtdSel >= totalSelecionavel
             const ativoBU = filtroBU.has(key)
             return (
               <div key={key} className="flex items-center gap-0.5">
