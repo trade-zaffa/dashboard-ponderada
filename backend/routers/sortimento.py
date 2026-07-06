@@ -64,19 +64,23 @@ def get_sortimento(
                  p.cd_prod_fabric, p.cd_barra_compra, p.cd_prod_ncm, p.qtde_unid_cmp
     """
 
-    # Q2: Base de EANs Unilever com estoque disponível
+    # Q2: Base de EANs Unilever com estoque disponível (matriz cd_emp=1 + filial cd_emp=3)
     sql_estoque = """
         SELECT p.cd_prod, p.cd_barra AS ean, p.cd_barra_compra AS dun,
                p.cd_prod_ncm AS ncm, p.cd_prod_fabric AS cod_fabricante,
                p.qtde_unid_cmp AS fator_caixa,
-               p.descricao AS produto, s.cd_secao, s.descricao AS bu
+               p.descricao AS produto, s.cd_secao, s.descricao AS bu,
+               SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_matriz,
+               SUM(CASE WHEN e.cd_emp = 3 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_filial
         FROM produto p
         JOIN linha l ON l.cd_linha = p.cd_linha
         JOIN secao s ON s.cd_secao = l.cd_secao
-        JOIN estoque e ON e.cd_prod = p.cd_prod AND e.cd_local = 'CENTRAL'
+        JOIN estoque e ON e.cd_prod = p.cd_prod AND e.cd_local = 'CENTRAL' AND e.cd_emp IN (1,3)
         WHERE p.cd_fabric = 'UNILEV' AND p.ativo = 1
             AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
-            AND (e.qtde - ISNULL(e.qtde_pend_pedv,0)) > 0
+        GROUP BY p.cd_prod, p.cd_barra, p.cd_barra_compra, p.cd_prod_ncm, p.cd_prod_fabric,
+                 p.qtde_unid_cmp, p.descricao, s.cd_secao, s.descricao
+        HAVING SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) > 0
     """
 
     # Q3: Histórico completo — faturado (nota) + pedidos em aberto (it_pedv)
@@ -162,6 +166,8 @@ def get_sortimento(
             "unidades_vendidas": unidades,
             "minimo": min_unidades,
             "status": status,
+            "estoque_matriz": int(e.estoque_matriz or 0),
+            "estoque_filial": int(e.estoque_filial or 0),
         })
 
     return {

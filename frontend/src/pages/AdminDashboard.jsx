@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -543,6 +543,8 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Vendido</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Mín</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Cx</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Estoque Matriz</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Estoque Filial</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
@@ -574,6 +576,12 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                         </td>
                         <td className="px-4 py-2.5 text-center text-gray-400 text-xs">{item.minimo}</td>
                         <td className="px-4 py-2.5 text-center text-gray-400 text-xs">{item.fator_caixa}</td>
+                        <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-600">
+                          {(item.estoque_matriz ?? 0).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-mono text-xs text-gray-600">
+                          {(item.estoque_filial ?? 0).toLocaleString('pt-BR')}
+                        </td>
                         <td className="px-4 py-2.5 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${s?.fundo} ${s?.texto}`}>
                             {s?.label}
@@ -583,7 +591,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                     )
                   })}
                   {itensFiltrados.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">Nenhum item encontrado</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400">Nenhum item encontrado</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1094,6 +1102,111 @@ function PedidosAdmin({ token }) {
   )
 }
 
+// ─── Estoque ────────────────────────────────────────────────────────────────
+function EstoqueAdmin({ token }) {
+  const [dados, setDados] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [filtroBU, setFiltroBU] = useState('ALL')
+  const [busca, setBusca] = useState('')
+  const [somenteRuptura, setSomenteRuptura] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    setErro('')
+    adminGetEstoque(token)
+      .then(r => setDados(r.data))
+      .catch(e => setErro(e.response?.data?.detail || 'Erro ao carregar estoque'))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  const itens = dados || []
+
+  const itensFiltrados = useMemo(() => itens.filter(i => {
+    if (filtroBU !== 'ALL' && i.cd_secao !== filtroBU) return false
+    if (somenteRuptura && (i.estoque_matriz > 0 || i.estoque_filial > 0)) return false
+    if (busca && !(i.produto || '').toLowerCase().includes(busca.toLowerCase()) && !(i.ean || '').includes(busca)) return false
+    return true
+  }), [itens, filtroBU, busca, somenteRuptura])
+
+  if (loading) return (
+    <div className="flex items-center gap-2 py-16 text-gray-400 justify-center">
+      <div className="w-5 h-5 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+      Carregando estoque...
+    </div>
+  )
+  if (erro) return <p className="text-red-500 text-sm py-4">{erro}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1">
+          {['ALL', ...BUS].map(bu => (
+            <button key={bu} onClick={() => setFiltroBU(bu)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                filtroBU === bu ? 'bg-[#1e3a5f] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {bu === 'ALL' ? 'Todas BUs' : BU_LABELS[bu]}
+            </button>
+          ))}
+        </div>
+        <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+          placeholder="EAN ou produto..."
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 ml-auto cursor-pointer">
+          <input type="checkbox" checked={somenteRuptura} onChange={e => setSomenteRuptura(e.target.checked)}
+            className="rounded border-gray-300 text-[#1e3a5f]" />
+          Apenas rupturas (estoque zerado)
+        </label>
+        <span className="text-xs text-gray-400">{itensFiltrados.length} de {itens.length} EANs</span>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100 sticky top-0">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">EAN</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Produto</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">BU</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Cx</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Estoque Matriz</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Estoque Filial</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {itensFiltrados.map(item => (
+                <tr key={item.cd_prod} className={`hover:bg-gray-50 ${item.estoque_matriz <= 0 && item.estoque_filial <= 0 ? 'bg-red-50/50' : ''}`}>
+                  <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.ean}</td>
+                  <td className="px-4 py-2.5 text-gray-800 max-w-md">
+                    <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${BU_COR_P[item.cd_secao] ? '' : 'bg-gray-100 text-gray-600'}`}
+                      style={BU_COR_P[item.cd_secao] ? { backgroundColor: BU_COR_P[item.cd_secao], color: 'white' } : {}}>
+                      {BU_LABELS[item.cd_secao]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-gray-400 text-xs">{item.fator_caixa}</td>
+                  <td className={`px-4 py-2.5 text-center font-mono text-xs font-semibold ${item.estoque_matriz <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                    {item.estoque_matriz.toLocaleString('pt-BR')}
+                  </td>
+                  <td className={`px-4 py-2.5 text-center font-mono text-xs font-semibold ${item.estoque_filial <= 0 ? 'text-red-400' : 'text-gray-700'}`}>
+                    {item.estoque_filial.toLocaleString('pt-BR')}
+                  </td>
+                </tr>
+              ))}
+              {itensFiltrados.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400">Nenhum item encontrado</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Gerenciamento de Senhas ───────────────────────────────────────────────────
 function SenhasAdmin({ token, clientes }) {
   const [senhasSet, setSenhasSet] = useState(new Set())
@@ -1364,7 +1477,7 @@ export default function AdminDashboard({ token, onLogout }) {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 flex gap-1 pb-0">
-          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['pedidos', '📦 Pedidos'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
+          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['pedidos', '📦 Pedidos'], ['estoque', '📊 Estoque'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${tab === id ? 'bg-gray-50 text-[#1e3a5f]' : 'text-blue-200 hover:text-white hover:bg-white/10'}`}>
               {label}
@@ -1496,6 +1609,10 @@ export default function AdminDashboard({ token, onLogout }) {
 
         {tab === 'pedidos' && (
           <PedidosAdmin token={token} />
+        )}
+
+        {tab === 'estoque' && (
+          <EstoqueAdmin token={token} />
         )}
 
         {tab === 'senhas' && (

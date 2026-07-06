@@ -78,3 +78,6 @@ export const adminGetPedidosAbertosMes = (token) =>
 
 export const adminGetPedidosFaturadosMes = (token) =>
   api.get('/admin/pedidos-faturados-mes', adminHeaders(token))
+
+export const adminGetEstoque = (token) =>
+  api.get('/admin/estoque', adminHeaders(token))

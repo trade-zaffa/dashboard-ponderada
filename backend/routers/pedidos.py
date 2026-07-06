@@ -62,6 +62,8 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND MONTH(pv.dt_cad) = MONTH(GETDATE())
+          AND YEAR(pv.dt_cad) = YEAR(GETDATE())
         GROUP BY s.cd_secao
     """
 
@@ -137,6 +139,8 @@ def get_pedidos(cd_cliens: str = Query(...)):
             AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
             AND p.cd_fabric = 'UNILEV'
             AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+            AND MONTH(pv.dt_cad) = MONTH(GETDATE())
+            AND YEAR(pv.dt_cad) = YEAR(GETDATE())
         GROUP BY pv.nu_ped, pv.dt_cad, pv.cfop, pv.tp_ped, pv.InicioProcessoFatura, pv.cd_emp
         ORDER BY pv.dt_cad DESC
     """
@@ -365,6 +369,50 @@ def admin_pedidos_faturados_mes(authorization: str = Header(None)):
             "produto":      r.produto.strip() if r.produto else "",
             "qtde_liquida": float(r.qtde_liquida) if r.qtde_liquida else 0.0,
             "valor_liquido": float(r.valor_liquido) if r.valor_liquido else 0.0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/admin/estoque")
+def admin_estoque(authorization: str = Header(None)):
+    """Estoque (matriz + filial) de todos os EANs Unilever ativos."""
+    _verificar_admin(authorization)
+
+    sql = """
+        SELECT p.cd_prod, p.cd_barra AS ean, p.descricao AS produto,
+               s.cd_secao, p.qtde_unid_cmp AS fator_caixa,
+               SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_matriz,
+               SUM(CASE WHEN e.cd_emp = 3 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_filial
+        FROM produto p
+        JOIN linha l ON l.cd_linha = p.cd_linha
+        JOIN secao s ON s.cd_secao = l.cd_secao
+        LEFT JOIN estoque e ON e.cd_prod = p.cd_prod AND e.cd_local = 'CENTRAL' AND e.cd_emp IN (1,3)
+        WHERE p.cd_fabric = 'UNILEV' AND p.ativo = 1
+            AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+            AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+        GROUP BY p.cd_prod, p.cd_barra, p.descricao, s.cd_secao, p.qtde_unid_cmp
+        ORDER BY s.cd_secao, p.descricao
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return [
+        {
+            "cd_prod": r.cd_prod,
+            "ean": r.ean or "",
+            "produto": r.produto.strip() if r.produto else "",
+            "cd_secao": r.cd_secao.strip(),
+            "fator_caixa": r.fator_caixa,
+            "estoque_matriz": int(r.estoque_matriz or 0),
+            "estoque_filial": int(r.estoque_filial or 0),
         }
         for r in rows
     ]
