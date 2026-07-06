@@ -50,6 +50,7 @@ def _sql_faturado(ph: str) -> str:
         JOIN produto p   ON p.cd_prod = in2.cd_prod
         JOIN linha l     ON l.cd_linha = p.cd_linha
         JOIN secao s     ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({ph})
           AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
           AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
@@ -57,6 +58,7 @@ def _sql_faturado(ph: str) -> str:
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
           AND MONTH(n.dt_emis) = ? AND YEAR(n.dt_emis) = ?
         GROUP BY s.cd_secao
     """
@@ -116,10 +118,12 @@ def get_programa(
             FROM ped_vda pv
             JOIN nota n      ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
             JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({ph})
               AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
               AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+              AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
               AND MONTH(n.dt_emis) = ? AND YEAR(n.dt_emis) = ?
             GROUP BY in2.cd_prod
         )
@@ -306,6 +310,7 @@ def get_programa_resumo(
         JOIN secao s     ON s.cd_secao = l.cd_secao
         JOIN cliente c   ON c.cd_clien = pv.cd_clien
         JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE csf.CdFabric = 'UNILEV'
           AND csf.RamAtiv IN ('33  ','34  ')
           AND c.ativo = 1
@@ -315,6 +320,7 @@ def get_programa_resumo(
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
           AND (
             (YEAR(n.dt_emis) = {ano}          AND MONTH(n.dt_emis) = {mes}) OR
             (YEAR(n.dt_emis) = {ano_anterior} AND MONTH(n.dt_emis) = {mes})
@@ -353,10 +359,12 @@ def get_programa_resumo(
             JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
             JOIN cliente c   ON c.cd_clien = pv.cd_clien
             JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE csf.CdFabric = 'UNILEV' AND csf.RamAtiv IN ('33  ','34  ')
               AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
               AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+              AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
               AND MONTH(n.dt_emis) = {mes} AND YEAR(n.dt_emis) = {ano}
             GROUP BY LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8), in2.cd_prod
         )
