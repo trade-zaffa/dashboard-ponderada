@@ -85,8 +85,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
   useEffect(() => {
     setLoading(true)
     setErro('')
-    const ids = cliente.cd_cliens.join(',')
-    getPrograma(ids, cliente.cnpj_raiz, periodo.mes, periodo.ano)
+    getPrograma(cliente.cd_cliens, cliente.cnpj_raiz, periodo.mes, periodo.ano)
       .then(r => setDados(r.data))
       .catch(e => setErro(e.response?.data?.detail || 'Erro ao carregar programa'))
       .finally(() => setLoading(false))
