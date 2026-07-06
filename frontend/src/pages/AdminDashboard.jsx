@@ -647,15 +647,18 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
   const [savingExec, setSavingExec] = useState({})
   const [resumo, setResumo] = useState([])
   const [loadingResumo, setLoadingResumo] = useState(false)
+  const [erroResumo, setErroResumo] = useState('')
   const [subTab, setSubTab] = useState('ranking')
 
   useEffect(() => {
-    adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data))
+    adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data)).catch(() => {})
     setLoadingResumo(true)
+    setErroResumo('')
     adminGetProgramaResumo(token, mes, ano)
       .then(r => setResumo(r.data))
+      .catch(e => setErroResumo(e.response?.data?.detail || `Erro ${e.response?.status || ''}: ${e.message}`))
       .finally(() => setLoadingResumo(false))
-  }, [mes, ano])
+  }, [token, mes, ano])
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -706,6 +709,11 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
           <div className="flex items-center justify-center py-16 text-gray-400">
             <div className="w-5 h-5 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin mr-2" />
             Calculando programa para todos os clientes...
+          </div>
+        ) : erroResumo ? (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-6 text-sm">
+            <p className="font-semibold mb-1">Erro ao carregar programa</p>
+            <p className="font-mono text-xs">{erroResumo}</p>
           </div>
         ) : (
           <div className="space-y-3">
