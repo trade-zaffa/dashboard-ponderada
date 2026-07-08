@@ -241,6 +241,19 @@ export default function Portfolio({ session, periodo }) {
     })
   }
 
+  // Sugestão de compra: seleciona TODOS os EANs não positivados da BU (pendente + em_progresso + nunca_comprou),
+  // maximizando cobertura de sortimento -- diferente do ⊕/checkbox, que preservam nunca_comprou fora da seleção padrão.
+  const sugerirCompraBU = buKey => {
+    const eansDoBU = itens
+      .filter(i => i.cd_secao.trim() === buKey && i.status !== 'positivado')
+      .map(i => i.ean)
+    setSel(prev => {
+      const n = new Set(prev)
+      eansDoBU.forEach(e => n.add(e))
+      return n
+    })
+  }
+
   // Toggle cabeçalho: respeita a mesma regra — nunca_comprou não entra a menos que explicitamente filtrado
   const toggleTodosVisiveis = () => {
     const eans = itensFiltrados.filter(isSelecionavel).map(i => i.ean)
@@ -373,12 +386,21 @@ export default function Portfolio({ session, periodo }) {
                 <button
                   onClick={() => selecionarBU(key)}
                   title={todosSelBU ? `Desmarcar todos de ${cfg.label}` : `Selecionar todos de ${cfg.label}`}
-                  className={`px-2 py-1.5 rounded-r-full border-y border-r text-xs font-bold transition-all ${
+                  className={`px-2 py-1.5 border-y text-xs font-bold transition-all ${
                     todosSelBU ? 'text-white' : qtdSel > 0 ? 'text-white' : 'text-gray-500 hover:text-gray-700'
                   } ${ativoBU ? 'border-transparent' : `${cfg.borda} border`}`}
                   style={qtdSel > 0 ? { backgroundColor: cfg.cor, borderColor: cfg.cor } : ativoBU ? { backgroundColor: cfg.cor + '40', borderColor: 'transparent' } : {}}
                 >
                   {qtdSel > 0 ? qtdSel : '⊕'}
+                </button>
+                <button
+                  onClick={() => sugerirCompraBU(key)}
+                  title={`Sugerir compra: seleciona todos os EANs não positivados de ${cfg.label} (inclui nunca comprou) para maximizar o sortimento`}
+                  className={`px-2 py-1.5 rounded-r-full border-y border-r text-xs font-bold transition-all text-amber-600 hover:bg-amber-50 ${
+                    ativoBU ? 'border-transparent' : `${cfg.borda} border`
+                  }`}
+                >
+                  💡
                 </button>
               </div>
             )
