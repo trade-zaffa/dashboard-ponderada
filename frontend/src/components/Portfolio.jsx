@@ -120,6 +120,7 @@ export default function Portfolio({ session, periodo }) {
 
   const [filtroStatus, setFiltroStatus] = useState('ALL')
   const [filtroBU, setFiltroBU] = useState(new Set()) // Set vazio = todas as BUs
+  const [filtroDestaque, setFiltroDestaque] = useState('ALL') // 'ALL' | 'sortimento' | 'novo'
   const [busca, setBusca] = useState('')
 
   // Seleção como Set de EANs
@@ -136,6 +137,7 @@ export default function Portfolio({ session, periodo }) {
     setSel(new Set())
     setFiltroStatus('ALL')
     setFiltroBU(new Set())
+    setFiltroDestaque('ALL')
     setBusca('')
     setVista('lista')
     Promise.all([
@@ -169,12 +171,19 @@ export default function Portfolio({ session, periodo }) {
   const itensFiltrados = useMemo(() => itens.filter(i => {
     if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
     if (filtroBU.size > 0 && !filtroBU.has(i.cd_secao.trim())) return false
+    if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
+    if (filtroDestaque === 'novo' && !i.is_novo) return false
     if (busca) {
       const q = busca.toLowerCase()
       if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
     }
     return true
-  }), [itens, filtroStatus, filtroBU, busca])
+  }), [itens, filtroStatus, filtroBU, filtroDestaque, busca])
+
+  const contagemDestaque = useMemo(() => ({
+    sortimento: itens.filter(i => i.is_sortimento).length,
+    novo: itens.filter(i => i.is_novo).length,
+  }), [itens])
 
   // ── Seleção helpers ───────────────────────────────────────────────────────────
   const toggleItem = ean => setSel(prev => { const n = new Set(prev); n.has(ean) ? n.delete(ean) : n.add(ean); return n })
@@ -227,7 +236,7 @@ export default function Portfolio({ session, periodo }) {
   const todosFiltradosSel = itensFiltradosSelecionaveis.length > 0 && itensFiltradosSelecionaveis.every(i => sel.has(i.ean))
   const algumFiltradoSel = itensFiltrados.some(i => sel.has(i.ean))
 
-  const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || busca !== ''
+  const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || filtroDestaque !== 'ALL' || busca !== ''
 
   const toggleBU = bu => setFiltroBU(prev => {
     const n = new Set(prev)
@@ -235,7 +244,7 @@ export default function Portfolio({ session, periodo }) {
     return n
   })
 
-  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU(new Set()); setBusca('') }
+  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU(new Set()); setFiltroDestaque('ALL'); setBusca('') }
 
   // Contagem de selecionados por BU
   const selPorBU = useMemo(() => {
@@ -369,6 +378,23 @@ export default function Portfolio({ session, periodo }) {
           ))}
         </div>
 
+        {/* Destaque: pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-400 w-14 flex-shrink-0">Destaque</span>
+          <button onClick={() => setFiltroDestaque(filtroDestaque === 'sortimento' ? 'ALL' : 'sortimento')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              filtroDestaque === 'sortimento' ? 'bg-violet-500 text-white border-violet-500' : 'bg-violet-50 text-violet-700 border-transparent hover:opacity-80'
+            }`}>
+            Sortimento ({contagemDestaque.sortimento})
+          </button>
+          <button onClick={() => setFiltroDestaque(filtroDestaque === 'novo' ? 'ALL' : 'novo')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              filtroDestaque === 'novo' ? 'bg-orange-500 text-white border-orange-500' : 'bg-orange-50 text-orange-700 border-transparent hover:opacity-80'
+            }`}>
+            Produtos Novos ({contagemDestaque.novo})
+          </button>
+        </div>
+
         {/* Busca + limpar */}
         <div className="flex gap-2 items-center">
           <span className="text-xs font-semibold text-gray-400 w-14 flex-shrink-0">Busca</span>
@@ -416,6 +442,13 @@ export default function Portfolio({ session, periodo }) {
                 onRemove={() => toggleBU(bu)}
               />
             ))}
+            {filtroDestaque !== 'ALL' && (
+              <FilterChip
+                label={filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
+                cor={filtroDestaque === 'sortimento' ? '#8b5cf6' : '#f97316'}
+                onRemove={() => setFiltroDestaque('ALL')}
+              />
+            )}
             {busca && (
               <FilterChip
                 label={`"${busca}"`}

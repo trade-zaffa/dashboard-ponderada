@@ -251,6 +251,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
   const [subTab, setSubTab] = useState('sortimento')
   const [filtroBU, setFiltroBU] = useState('ALL')
   const [filtroStatus, setFiltroStatus] = useState('ALL')
+  const [filtroDestaque, setFiltroDestaque] = useState('ALL') // 'ALL' | 'sortimento' | 'novo'
   const [busca, setBusca] = useState('')
   const [sel, setSel] = useState(new Set())
   const [vista, setVista] = useState('lista') // 'lista' | 'pedido' | 'cadastro'
@@ -287,15 +288,22 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
   const itensFiltrados = useMemo(() => itens.filter(i => {
     if (filtroBU !== 'ALL' && i.cd_secao.trim() !== filtroBU) return false
     if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
+    if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
+    if (filtroDestaque === 'novo' && !i.is_novo) return false
     if (busca && !(i.produto || '').toLowerCase().includes(busca.toLowerCase()) && !(i.ean || '').includes(busca)) return false
     return true
-  }), [itens, filtroBU, filtroStatus, busca])
+  }), [itens, filtroBU, filtroStatus, filtroDestaque, busca])
+
+  const contagemDestaque = useMemo(() => ({
+    sortimento: itens.filter(i => i.is_sortimento).length,
+    novo: itens.filter(i => i.is_novo).length,
+  }), [itens])
 
   const itensSel = itens.filter(i => sel.has(i.ean))
   const itensSelOcultos = itensSel.filter(i => !itensFiltrados.find(f => f.ean === i.ean))
-  const temFiltro = filtroBU !== 'ALL' || filtroStatus !== 'ALL' || busca !== ''
+  const temFiltro = filtroBU !== 'ALL' || filtroStatus !== 'ALL' || filtroDestaque !== 'ALL' || busca !== ''
 
-  const limparFiltros = () => { setFiltroBU('ALL'); setFiltroStatus('ALL'); setBusca('') }
+  const limparFiltros = () => { setFiltroBU('ALL'); setFiltroStatus('ALL'); setFiltroDestaque('ALL'); setBusca('') }
 
   const todosSelecionados = itensFiltrados.length > 0 && itensFiltrados.every(i => sel.has(i.ean))
 
@@ -461,6 +469,23 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
               ))}
             </div>
 
+            {/* Destaque pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Destaque</span>
+              {[
+                { key: 'sortimento', label: 'Sortimento', count: contagemDestaque.sortimento, cls: 'bg-violet-100 text-violet-700' },
+                { key: 'novo',       label: 'Produtos Novos', count: contagemDestaque.novo,    cls: 'bg-orange-100 text-orange-700' },
+              ].map(f => (
+                <button key={f.key}
+                  onClick={() => setFiltroDestaque(filtroDestaque === f.key ? 'ALL' : f.key)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border-2 ${
+                    filtroDestaque === f.key ? 'border-[#1e3a5f] shadow-sm' : 'border-transparent'
+                  } ${f.cls}`}>
+                  {f.label} <span className="opacity-60">({f.count})</span>
+                </button>
+              ))}
+            </div>
+
             {/* Busca + seleção BU */}
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-gray-400 w-14 shrink-0">Busca</span>
@@ -509,6 +534,14 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                 <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${STATUS_META[filtroStatus]?.fundo} ${STATUS_META[filtroStatus]?.texto}`}>
                   {STATUS_META[filtroStatus]?.label}
                   <button onClick={() => setFiltroStatus('ALL')} className="font-bold opacity-70 hover:opacity-100">✕</button>
+                </span>
+              )}
+              {filtroDestaque !== 'ALL' && (
+                <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
+                  filtroDestaque === 'sortimento' ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-orange-50 border-orange-200 text-orange-700'
+                }`}>
+                  {filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
+                  <button onClick={() => setFiltroDestaque('ALL')} className="font-bold opacity-70 hover:opacity-100">✕</button>
                 </span>
               )}
               {busca && (
