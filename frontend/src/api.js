@@ -81,3 +81,12 @@ export const adminGetPedidosFaturadosMes = (token) =>
 
 export const adminGetEstoque = (token) =>
   api.get('/admin/estoque', adminHeaders(token))
+
+export const adminGetSortimentoEans = (token) =>
+  api.get('/admin/sortimento-eans', adminHeaders(token))
+
+export const adminAddSortimentoEans = (token, eans) =>
+  api.post('/admin/sortimento-eans', { eans }, adminHeaders(token))
+
+export const adminDeleteSortimentoEan = (token, ean) =>
+  api.delete(`/admin/sortimento-eans/${ean}`, adminHeaders(token))

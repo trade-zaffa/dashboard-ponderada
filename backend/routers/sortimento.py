@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from database import get_connection
 from datetime import date
+from routers.metas import get_db
 
 router = APIRouter()
 
@@ -70,6 +71,7 @@ def get_sortimento(
                p.cd_prod_ncm AS ncm, p.cd_prod_fabric AS cod_fabricante,
                p.qtde_unid_cmp AS fator_caixa,
                p.descricao AS produto, s.cd_secao, s.descricao AS bu,
+               p.dt_cad,
                SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_matriz,
                SUM(CASE WHEN e.cd_emp = 3 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_filial
         FROM produto p
@@ -79,7 +81,7 @@ def get_sortimento(
         WHERE p.cd_fabric = 'UNILEV' AND p.ativo = 1
             AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
         GROUP BY p.cd_prod, p.cd_barra, p.cd_barra_compra, p.cd_prod_ncm, p.cd_prod_fabric,
-                 p.qtde_unid_cmp, p.descricao, s.cd_secao, s.descricao
+                 p.qtde_unid_cmp, p.descricao, s.cd_secao, s.descricao, p.dt_cad
         HAVING SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) > 0
     """
 
@@ -136,6 +138,12 @@ def get_sortimento(
 
     historico_set = {r.cd_prod for r in historico_rows}
 
+    db = get_db()
+    sortimento_set = {r["ean"] for r in db.execute("SELECT ean FROM sortimento_ean").fetchall()}
+    db.close()
+
+    hoje = date.today()
+
     seen_eans = set()
     result = []
     for e in estoque_rows:
@@ -153,6 +161,8 @@ def get_sortimento(
         else:
             status = "nunca_comprou"
 
+        is_novo = bool(e.dt_cad) and (hoje - e.dt_cad.date()).days <= 60
+
         result.append({
             "cd_prod": e.cd_prod,
             "ean": e.ean,
@@ -168,6 +178,8 @@ def get_sortimento(
             "status": status,
             "estoque_matriz": int(e.estoque_matriz or 0),
             "estoque_filial": int(e.estoque_filial or 0),
+            "is_novo": is_novo,
+            "is_sortimento": e.ean in sortimento_set,
         })
 
     return {
