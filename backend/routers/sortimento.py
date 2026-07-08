@@ -72,6 +72,7 @@ def get_sortimento(
                p.cd_prod_ncm AS ncm, p.cd_prod_fabric AS cod_fabricante,
                p.qtde_unid_cmp AS fator_caixa,
                p.unid_cmp,
+               p.qtde_multipla,
                p.descricao AS produto, s.cd_secao, s.descricao AS bu,
                p.dt_cad,
                SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) AS estoque_matriz,
@@ -83,7 +84,7 @@ def get_sortimento(
         WHERE p.cd_fabric = 'UNILEV' AND p.ativo = 1
             AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
         GROUP BY p.cd_prod, p.cd_barra, p.cd_barra_compra, p.cd_prod_ncm, p.cd_prod_fabric,
-                 p.qtde_unid_cmp, p.unid_cmp, p.descricao, s.cd_secao, s.descricao, p.dt_cad
+                 p.qtde_unid_cmp, p.unid_cmp, p.qtde_multipla, p.descricao, s.cd_secao, s.descricao, p.dt_cad
         HAVING SUM(CASE WHEN e.cd_emp = 1 THEN e.qtde - ISNULL(e.qtde_pend_pedv,0) ELSE 0 END) > 0
     """
 
@@ -175,6 +176,7 @@ def get_sortimento(
             "cod_fabricante": e.cod_fabricante,
             "fator_caixa": e.fator_caixa,
             "unid_cmp": (e.unid_cmp or "").strip(),
+            "qtde_multipla": e.qtde_multipla,
             "produto": e.produto.strip(),
             "cd_secao": e.cd_secao.strip(),
             "bu": e.bu.strip(),

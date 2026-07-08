@@ -16,11 +16,12 @@ const STATUS_LABEL = {
 
 const ORDEM_BU = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 
-// EANs vendidos em caixa (unid_cmp='CX') levam o sufixo C<fator> no código do pedido
-// (ex: 7891150065352C24). Itens vendidos por unidade (UN) usam o EAN puro.
+// Produtos com embalagem intermediária (qtde_multipla preenchida: dúzia/display)
+// levam o sufixo C<qtde_multipla> no código do pedido (ex: 7891700080415C10).
+// Produtos sem qtde_multipla usam o EAN puro (compra em UN).
 function codigoPedido(item) {
-  if (item.unid_cmp && item.unid_cmp !== 'CX') return item.ean
-  return `${item.ean}C${Math.round(item.fator_caixa)}`
+  if (!item.qtde_multipla) return item.ean
+  return `${item.ean}C${Math.round(item.qtde_multipla)}`
 }
 
 export default function GerarPedido({ itens, onVoltar }) {
@@ -69,6 +70,22 @@ export default function GerarPedido({ itens, onVoltar }) {
     XLSX.writeFile(wb, `Pedido_Unilever_${new Date().toISOString().slice(0,10)}.xlsx`)
   }
 
+  // Exporta no formato exato exigido pela plataforma de importação (Infracommerce):
+  // linhas 1-4 de instrução fixas, depois colunas "SKU (código de barras)" e "Quantidade desejada".
+  const handleExportarPedidoCompra = () => {
+    const linhas = [
+      ['ATENÇÃO: Não remova o cabeçalho desta planilha (linhas 1 a 4).', null],
+      ['Passo 1: Insira um SKU (código de barras) por linha e a respectiva quantidade desejada.', null],
+      ['Passo 2: Salve o arquivo, mantenha o formato original (.xlsx) e importe na plataforma.', null],
+      ['SKU (código de barras)', 'Quantidade desejada'],
+      ...itens.map(i => [codigoPedido(i), 1]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(linhas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Pedido')
+    XLSX.writeFile(wb, `pedido_compra_${new Date().toISOString().slice(0,10)}.xlsx`)
+  }
+
   const busVisiveis = Object.entries(porBU).filter(([, arr]) => arr.length > 0)
 
   return (
@@ -83,6 +100,16 @@ export default function GerarPedido({ itens, onVoltar }) {
           </p>
         </div>
         <div className="flex gap-2 flex-shrink-0">
+          <button
+            onClick={handleExportarPedidoCompra}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Exportar Pedido de Compra
+          </button>
           <button
             onClick={handleExcel}
             className="bg-[#1e3a5f] hover:bg-[#162d4a] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
