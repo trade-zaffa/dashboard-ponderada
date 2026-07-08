@@ -18,6 +18,22 @@ const STATUS = {
   nunca_comprou: { label: 'Nunca Comprou', cor: '#8b5cf6', pill: 'bg-violet-100 text-violet-800',  borda: 'border-l-violet-500' },
 }
 
+const CURVA_ABC_CFG = {
+  A: 'bg-emerald-600 text-white',
+  B: 'bg-amber-500 text-white',
+  C: 'bg-gray-400 text-white',
+}
+
+function CurvaAbcBadge({ curva }) {
+  if (!curva) return null
+  return (
+    <span title={`Curva ABC: ${curva}`}
+      className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold shrink-0 ${CURVA_ABC_CFG[curva] || 'bg-gray-300 text-gray-700'}`}>
+      {curva}
+    </span>
+  )
+}
+
 // ─── Barra de progresso animada ────────────────────────────────────────────────
 function Bar({ valor, total, cor, h = 'h-2' }) {
   const [w, setW] = useState(0)
@@ -569,6 +585,7 @@ export default function Portfolio({ session, periodo }) {
                             {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
                           </span>
                         )}
+                        <CurvaAbcBadge curva={item.curva_abc} />
                         <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
                       </div>
                       {item.fator_caixa > 1 && <div className="text-xs text-gray-400 mt-0.5">{item.fator_caixa} un/cx</div>}

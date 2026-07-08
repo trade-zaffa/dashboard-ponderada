@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from database import get_connection
 from datetime import date
 from routers.metas import get_db
+from curva_abc import get_curva_abc_map
 
 router = APIRouter()
 
@@ -142,6 +143,8 @@ def get_sortimento(
     sortimento_set = {r["ean"] for r in db.execute("SELECT ean FROM sortimento_ean").fetchall()}
     db.close()
 
+    curva_abc_map = get_curva_abc_map()
+
     hoje = date.today()
 
     seen_eans = set()
@@ -180,6 +183,7 @@ def get_sortimento(
             "estoque_filial": int(e.estoque_filial or 0),
             "is_novo": is_novo,
             "is_sortimento": e.ean in sortimento_set,
+            "curva_abc": curva_abc_map.get(e.cd_prod),
         })
 
     return {

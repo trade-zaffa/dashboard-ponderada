@@ -20,6 +20,22 @@ const STATUS_META = {
   nunca_comprou: { label: 'Nunca Comprou', cor: 'bg-purple-500',  texto: 'text-purple-700',  fundo: 'bg-purple-50' },
 }
 
+const CURVA_ABC_CFG = {
+  A: 'bg-emerald-600 text-white',
+  B: 'bg-amber-500 text-white',
+  C: 'bg-gray-400 text-white',
+}
+
+function CurvaAbcBadge({ curva }) {
+  if (!curva) return null
+  return (
+    <span title={`Curva ABC: ${curva}`}
+      className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold shrink-0 ${CURVA_ABC_CFG[curva] || 'bg-gray-300 text-gray-700'}`}>
+      {curva}
+    </span>
+  )
+}
+
 function PctColor(pct) {
   if (pct >= 70) return 'text-emerald-600'
   if (pct >= 40) return 'text-amber-600'
@@ -611,6 +627,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                                 {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
                               </span>
                             )}
+                            <CurvaAbcBadge curva={item.curva_abc} />
                             <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
                           </div>
                         </td>
@@ -1223,7 +1240,10 @@ function EstoqueAdmin({ token }) {
                 <tr key={item.cd_prod} className={`hover:bg-gray-50 ${item.estoque_matriz <= 0 && item.estoque_filial <= 0 ? 'bg-red-50/50' : ''}`}>
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.ean}</td>
                   <td className="px-4 py-2.5 text-gray-800 max-w-md">
-                    <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                    <div className="flex items-center gap-1.5">
+                      <CurvaAbcBadge curva={item.curva_abc} />
+                      <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                    </div>
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${BU_COR_P[item.cd_secao] ? '' : 'bg-gray-100 text-gray-600'}`}

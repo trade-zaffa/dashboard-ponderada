@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Header
 from database import get_connection
+from curva_abc import get_curva_abc_map
 import os
 
 router = APIRouter()
@@ -408,6 +409,8 @@ def admin_estoque(authorization: str = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    curva_abc_map = get_curva_abc_map()
+
     return [
         {
             "cd_prod": r.cd_prod,
@@ -417,6 +420,7 @@ def admin_estoque(authorization: str = Header(None)):
             "fator_caixa": r.fator_caixa,
             "estoque_matriz": int(r.estoque_matriz or 0),
             "estoque_filial": int(r.estoque_filial or 0),
+            "curva_abc": curva_abc_map.get(r.cd_prod),
         }
         for r in rows
     ]
