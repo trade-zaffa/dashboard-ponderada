@@ -34,6 +34,19 @@ function CurvaAbcBadge({ curva }) {
   )
 }
 
+function AlertaDiasBadge({ dias, alerta }) {
+  if (!alerta) return null
+  const cfg = alerta === 'vermelho'
+    ? { icone: '🔴', cls: 'bg-red-100 text-red-700' }
+    : { icone: '🟡', cls: 'bg-amber-100 text-amber-700' }
+  return (
+    <span title={`${dias} dias sem comprar este item`}
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${cfg.cls}`}>
+      {cfg.icone} {dias}d
+    </span>
+  )
+}
+
 // ─── Barra de progresso animada ────────────────────────────────────────────────
 function Bar({ valor, total, cor, h = 'h-2' }) {
   const [w, setW] = useState(0)
@@ -642,6 +655,7 @@ export default function Portfolio({ session, periodo }) {
                         )}
                         <CurvaAbcBadge curva={item.curva_abc} />
                         <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
+                        <AlertaDiasBadge dias={item.dias_sem_comprar} alerta={item.alerta_estoque} />
                       </div>
                       {item.fator_caixa > 1 && <div className="text-xs text-gray-400 mt-0.5">{item.fator_caixa} un/cx</div>}
                     </td>

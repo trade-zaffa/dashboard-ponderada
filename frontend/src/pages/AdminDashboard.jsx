@@ -36,6 +36,19 @@ function CurvaAbcBadge({ curva }) {
   )
 }
 
+function AlertaDiasBadge({ dias, alerta }) {
+  if (!alerta) return null
+  const cfg = alerta === 'vermelho'
+    ? { icone: '🔴', cls: 'bg-red-100 text-red-700' }
+    : { icone: '🟡', cls: 'bg-amber-100 text-amber-700' }
+  return (
+    <span title={`${dias} dias sem comprar este item`}
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${cfg.cls}`}>
+      {cfg.icone} {dias}d
+    </span>
+  )
+}
+
 function PctColor(pct) {
   if (pct >= 70) return 'text-emerald-600'
   if (pct >= 40) return 'text-amber-600'
@@ -661,6 +674,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                             )}
                             <CurvaAbcBadge curva={item.curva_abc} />
                             <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                            <AlertaDiasBadge dias={item.dias_sem_comprar} alerta={item.alerta_estoque} />
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{BU_LABELS[item.cd_secao]} — {BU_FULL[item.cd_secao]}</td>
