@@ -112,6 +112,24 @@ def get_sortimento(
         ) v
     """
 
+    # Q4: Última compra faturada por EAN (para alerta de dias sem comprar)
+    sql_ultima_compra = f"""
+        SELECT in2.cd_prod, MAX(n.dt_emis) AS ultima_compra
+        FROM ped_vda pv
+        JOIN nota n      ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
+        JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+        JOIN produto p   ON p.cd_prod = in2.cd_prod
+        JOIN linha l     ON l.cd_linha = p.cd_linha
+        JOIN secao s     ON s.cd_secao = l.cd_secao
+        WHERE pv.cd_clien IN ({placeholders})
+          AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+          AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+          AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+          AND p.cd_fabric = 'UNILEV'
+          AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+        GROUP BY in2.cd_prod
+    """
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -125,6 +143,9 @@ def get_sortimento(
 
         cursor.execute(sql_historico, ids + ids)
         historico_rows = cursor.fetchall()
+
+        cursor.execute(sql_ultima_compra, ids)
+        ultima_compra_rows = cursor.fetchall()
 
         conn.close()
     except Exception as e:
@@ -140,6 +161,7 @@ def get_sortimento(
             vendas_map[r.ean] = un
 
     historico_set = {r.cd_prod for r in historico_rows}
+    ultima_compra_map = {r.cd_prod: r.ultima_compra for r in ultima_compra_rows}
 
     db = get_db()
     sortimento_set = {r["ean"] for r in db.execute("SELECT ean FROM sortimento_ean").fetchall()}
@@ -168,6 +190,17 @@ def get_sortimento(
 
         is_novo = bool(e.dt_cad) and (hoje - e.dt_cad.date()).days <= 60
 
+        ultima_compra = ultima_compra_map.get(e.cd_prod)
+        dias_sem_comprar = (hoje - ultima_compra.date()).days if ultima_compra else None
+        if dias_sem_comprar is None:
+            alerta_estoque = None
+        elif dias_sem_comprar >= 90:
+            alerta_estoque = "vermelho"
+        elif dias_sem_comprar >= 60:
+            alerta_estoque = "amarelo"
+        else:
+            alerta_estoque = None
+
         result.append({
             "cd_prod": e.cd_prod,
             "ean": e.ean,
@@ -188,6 +221,8 @@ def get_sortimento(
             "is_novo": is_novo,
             "is_sortimento": e.ean in sortimento_set,
             "curva_abc": curva_abc_map.get(e.cd_prod),
+            "dias_sem_comprar": dias_sem_comprar,
+            "alerta_estoque": alerta_estoque,
         })
 
     return {
