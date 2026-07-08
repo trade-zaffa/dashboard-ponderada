@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -568,7 +568,18 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                         </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.ean}</td>
                         <td className="px-4 py-2.5 text-gray-800 max-w-xs">
-                          <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                          <div className="flex items-center gap-1.5">
+                            {(item.is_novo || item.is_sortimento) && (
+                              <span className="flex items-center gap-0.5 shrink-0" title={
+                                item.is_novo && item.is_sortimento ? 'Produto novo + Sortimento' :
+                                item.is_novo ? 'Produto novo (cadastrado há < 2 meses)' : 'Produto do Sortimento'
+                              }>
+                                {item.is_novo && <span className="w-1.5 h-4 rounded-full bg-orange-500" />}
+                                {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
+                              </span>
+                            )}
+                            <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{BU_LABELS[item.cd_secao]} — {BU_FULL[item.cd_secao]}</td>
                         <td className="px-4 py-2.5 text-center font-mono text-xs font-semibold text-gray-800">
@@ -1207,6 +1218,108 @@ function EstoqueAdmin({ token }) {
   )
 }
 
+// ─── Sortimento (lista manual de EANs) ─────────────────────────────────────────
+function SortimentoEansAdmin({ token }) {
+  const [lista, setLista] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [busca, setBusca] = useState('')
+
+  const carregar = () => {
+    setLoading(true)
+    adminGetSortimentoEans(token).then(r => setLista(r.data)).finally(() => setLoading(false))
+  }
+
+  useEffect(() => { carregar() }, [token])
+
+  const handleAdicionar = async () => {
+    const eans = texto.split(/[\s,;]+/).map(e => e.trim()).filter(Boolean)
+    if (eans.length === 0) return
+    setSalvando(true)
+    setMsg('')
+    try {
+      const r = await adminAddSortimentoEans(token, eans)
+      setMsg(`${r.data.inseridos} EAN(s) processado(s)`)
+      setTexto('')
+      carregar()
+    } catch (e) {
+      setMsg(e.response?.data?.detail || 'Erro ao salvar')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const handleRemover = async (ean) => {
+    await adminDeleteSortimentoEan(token, ean)
+    setLista(l => l.filter(i => i.ean !== ean))
+  }
+
+  const listaFiltrada = lista.filter(i => i.ean.includes(busca))
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 text-sm text-blue-700">
+        EANs cadastrados aqui aparecem com barra roxa no relatório de Sortimento do cliente. Produtos cadastrados no ERP há menos de 2 meses aparecem com barra laranja (e ambas se for dos dois casos).
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
+        <h3 className="font-semibold text-gray-800">Adicionar EANs</h3>
+        <textarea
+          value={texto}
+          onChange={e => setTexto(e.target.value)}
+          placeholder="Cole os EANs aqui (um por linha, ou separados por vírgula/espaço)"
+          rows={5}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] font-mono"
+        />
+        <div className="flex items-center gap-3">
+          <button onClick={handleAdicionar} disabled={salvando || !texto.trim()}
+            className="bg-[#1e3a5f] hover:bg-[#162d4a] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+            {salvando ? 'Salvando...' : 'Adicionar à lista'}
+          </button>
+          {msg && <span className="text-sm text-emerald-600">{msg}</span>}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            {lista.length} EAN{lista.length !== 1 ? 's' : ''} no sortimento
+          </p>
+          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar EAN..."
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-gray-400">
+            <div className="w-5 h-5 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin mr-2" />
+            Carregando...
+          </div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+            {listaFiltrada.map(item => (
+              <div key={item.ean} className="px-5 py-2.5 flex items-center justify-between hover:bg-gray-50">
+                <span className="font-mono text-sm text-gray-700 flex items-center gap-2">
+                  <span className="w-1.5 h-4 rounded-full bg-violet-500" />
+                  {item.ean}
+                </span>
+                <button onClick={() => handleRemover(item.ean)}
+                  className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                  Remover
+                </button>
+              </div>
+            ))}
+            {listaFiltrada.length === 0 && (
+              <p className="text-center text-gray-400 py-8 text-sm">Nenhum EAN cadastrado</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Gerenciamento de Senhas ───────────────────────────────────────────────────
 function SenhasAdmin({ token, clientes }) {
   const [senhasSet, setSenhasSet] = useState(new Set())
@@ -1477,7 +1590,7 @@ export default function AdminDashboard({ token, onLogout }) {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 flex gap-1 pb-0">
-          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['pedidos', '📦 Pedidos'], ['estoque', '📊 Estoque'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
+          {[['ranking', 'Ranking'], ['clientes', 'Clientes'], ['metas', '🎯 Metas'], ['programa', '🏆 Programa'], ['pedidos', '📦 Pedidos'], ['estoque', '📊 Estoque'], ['sortimento_eans', '🟣 Sortimento'], ['senhas', '🔑 Senhas']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${tab === id ? 'bg-gray-50 text-[#1e3a5f]' : 'text-blue-200 hover:text-white hover:bg-white/10'}`}>
               {label}
@@ -1613,6 +1726,10 @@ export default function AdminDashboard({ token, onLogout }) {
 
         {tab === 'estoque' && (
           <EstoqueAdmin token={token} />
+        )}
+
+        {tab === 'sortimento_eans' && (
+          <SortimentoEansAdmin token={token} />
         )}
 
         {tab === 'senhas' && (

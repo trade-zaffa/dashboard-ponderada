@@ -526,7 +526,18 @@ export default function Portfolio({ session, periodo }) {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-400">{item.ean}</td>
                     <td className="px-4 py-3 max-w-xs">
-                      <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
+                      <div className="flex items-center gap-1.5">
+                        {(item.is_novo || item.is_sortimento) && (
+                          <span className="flex items-center gap-0.5 shrink-0" title={
+                            item.is_novo && item.is_sortimento ? 'Produto novo + Sortimento' :
+                            item.is_novo ? 'Produto novo (cadastrado há < 2 meses)' : 'Produto do Sortimento'
+                          }>
+                            {item.is_novo && <span className="w-1.5 h-4 rounded-full bg-orange-500" />}
+                            {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
+                          </span>
+                        )}
+                        <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
+                      </div>
                       {item.fator_caixa > 1 && <div className="text-xs text-gray-400 mt-0.5">{item.fator_caixa} un/cx</div>}
                     </td>
                     <td className="px-4 py-3 text-center">

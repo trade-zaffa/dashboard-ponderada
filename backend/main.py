@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / '.env', override=True)
-from routers import auth, sortimento, faturamento, admin, pedidos, metas, programa
+from routers import auth, sortimento, faturamento, admin, pedidos, metas, programa, sortimento_eans
 
 app = FastAPI(title="Dashboard Ponderada", version="1.0.0")
 
@@ -25,6 +25,7 @@ app.include_router(admin.router, prefix="/api", tags=["admin"])
 app.include_router(pedidos.router, prefix="/api", tags=["pedidos"])
 app.include_router(metas.router, prefix="/api", tags=["metas"])
 app.include_router(programa.router, prefix="/api", tags=["programa"])
+app.include_router(sortimento_eans.router, prefix="/api", tags=["sortimento_eans"])
 
 @app.get("/")
 def root():
