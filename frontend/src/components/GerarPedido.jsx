@@ -16,6 +16,13 @@ const STATUS_LABEL = {
 
 const ORDEM_BU = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 
+// EANs vendidos em caixa (unid_cmp='CX') levam o sufixo C<fator> no código do pedido
+// (ex: 7891150065352C24). Itens vendidos por unidade (UN) usam o EAN puro.
+function codigoPedido(item) {
+  if (item.unid_cmp && item.unid_cmp !== 'CX') return item.ean
+  return `${item.ean}C${Math.round(item.fator_caixa)}`
+}
+
 export default function GerarPedido({ itens, onVoltar }) {
   // Agrupar por BU na ordem correta
   const porBU = {}
@@ -26,11 +33,12 @@ export default function GerarPedido({ itens, onVoltar }) {
   })
 
   const handleCopiar = () => {
-    const header = 'BU\tCód. Fabricante\tEAN\tDUN\tNCM\tFator/Caixa\tProduto\tStatus'
+    const header = 'BU\tCód. Fabricante\tEAN\tCódigo Pedido\tDUN\tNCM\tFator/Caixa\tProduto\tStatus'
     const linhas = itens.map(i => [
       BU[i.cd_secao]?.short || i.cd_secao,
       i.cod_fabricante || '',
       i.ean,
+      codigoPedido(i),
       i.dun || '',
       i.ncm || '',
       i.fator_caixa,
@@ -46,6 +54,7 @@ export default function GerarPedido({ itens, onVoltar }) {
       'BU': BU[i.cd_secao]?.short || i.cd_secao,
       'Cód. Fabricante': i.cod_fabricante || '',
       'EAN': i.ean,
+      'Código Pedido': codigoPedido(i),
       'DUN': i.dun || '',
       'NCM': i.ncm || '',
       'Fator/Caixa': i.fator_caixa,
@@ -142,6 +151,7 @@ export default function GerarPedido({ itens, onVoltar }) {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Cód. Fab.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">EAN</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Código Pedido</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">DUN</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Produto</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase">Cx/Un</th>
@@ -154,6 +164,7 @@ export default function GerarPedido({ itens, onVoltar }) {
                     <tr key={item.ean} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-xs text-gray-500">{item.cod_fabricante || '—'}</td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-500">{item.ean}</td>
+                      <td className="px-4 py-3 font-mono text-xs font-semibold text-[#1e3a5f]">{codigoPedido(item)}</td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-400">{item.dun || '—'}</td>
                       <td className="px-4 py-3 text-gray-800 max-w-xs">
                         <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
