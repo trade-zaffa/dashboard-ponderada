@@ -241,11 +241,11 @@ export default function Portfolio({ session, periodo }) {
     })
   }
 
-  // Sugestão de compra: seleciona TODOS os EANs não positivados da BU (pendente + em_progresso + nunca_comprou),
-  // maximizando cobertura de sortimento -- diferente do ⊕/checkbox, que preservam nunca_comprou fora da seleção padrão.
+  // Sugestão de compra: seleciona apenas os EANs do sortimento (is_sortimento) não positivados da BU.
+  // Itens fora do sortimento só entram na seleção se o usuário clicar manualmente.
   const sugerirCompraBU = buKey => {
     const eansDoBU = itens
-      .filter(i => i.cd_secao.trim() === buKey && i.status !== 'positivado')
+      .filter(i => i.cd_secao.trim() === buKey && i.status !== 'positivado' && i.is_sortimento)
       .map(i => i.ean)
     setSel(prev => {
       const n = new Set(prev)
@@ -395,7 +395,7 @@ export default function Portfolio({ session, periodo }) {
                 </button>
                 <button
                   onClick={() => sugerirCompraBU(key)}
-                  title={`Sugerir compra: seleciona todos os EANs não positivados de ${cfg.label} (inclui nunca comprou) para maximizar o sortimento`}
+                  title={`Sugerir compra: seleciona os EANs do sortimento ainda não positivados de ${cfg.label}`}
                   className={`px-2 py-1.5 rounded-r-full border-y border-r text-xs font-bold transition-all text-amber-600 hover:bg-amber-50 ${
                     ativoBU ? 'border-transparent' : `${cfg.borda} border`
                   }`}
