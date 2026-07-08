@@ -18,6 +18,22 @@ const STATUS = {
   nunca_comprou: { label: 'Nunca Comprou', cor: '#8b5cf6', pill: 'bg-violet-100 text-violet-800',  borda: 'border-l-violet-500' },
 }
 
+const CURVA_ABC_CFG = {
+  A: 'bg-emerald-600 text-white',
+  B: 'bg-amber-500 text-white',
+  C: 'bg-gray-400 text-white',
+}
+
+function CurvaAbcBadge({ curva }) {
+  if (!curva) return null
+  return (
+    <span title={`Curva ABC: ${curva}`}
+      className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold shrink-0 ${CURVA_ABC_CFG[curva] || 'bg-gray-300 text-gray-700'}`}>
+      {curva}
+    </span>
+  )
+}
+
 // ─── Barra de progresso animada ────────────────────────────────────────────────
 function Bar({ valor, total, cor, h = 'h-2' }) {
   const [w, setW] = useState(0)
@@ -121,6 +137,7 @@ export default function Portfolio({ session, periodo }) {
   const [filtroStatus, setFiltroStatus] = useState('ALL')
   const [filtroBU, setFiltroBU] = useState(new Set()) // Set vazio = todas as BUs
   const [filtroDestaque, setFiltroDestaque] = useState('ALL') // 'ALL' | 'sortimento' | 'novo'
+  const [filtroAbc, setFiltroAbc] = useState('ALL') // 'ALL' | 'A' | 'B' | 'C'
   const [busca, setBusca] = useState('')
 
   // Seleção como Set de EANs
@@ -138,6 +155,7 @@ export default function Portfolio({ session, periodo }) {
     setFiltroStatus('ALL')
     setFiltroBU(new Set())
     setFiltroDestaque('ALL')
+    setFiltroAbc('ALL')
     setBusca('')
     setVista('lista')
     Promise.all([
@@ -173,12 +191,19 @@ export default function Portfolio({ session, periodo }) {
     if (filtroBU.size > 0 && !filtroBU.has(i.cd_secao.trim())) return false
     if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
     if (filtroDestaque === 'novo' && !i.is_novo) return false
+    if (filtroAbc !== 'ALL' && i.curva_abc !== filtroAbc) return false
     if (busca) {
       const q = busca.toLowerCase()
       if (!(i.produto || '').toLowerCase().includes(q) && !(i.ean || '').includes(busca)) return false
     }
     return true
-  }), [itens, filtroStatus, filtroBU, filtroDestaque, busca])
+  }), [itens, filtroStatus, filtroBU, filtroDestaque, filtroAbc, busca])
+
+  const contagemAbc = useMemo(() => ({
+    A: itens.filter(i => i.curva_abc === 'A').length,
+    B: itens.filter(i => i.curva_abc === 'B').length,
+    C: itens.filter(i => i.curva_abc === 'C').length,
+  }), [itens])
 
   const contagemDestaque = useMemo(() => ({
     sortimento: itens.filter(i => i.is_sortimento).length,
@@ -236,7 +261,7 @@ export default function Portfolio({ session, periodo }) {
   const todosFiltradosSel = itensFiltradosSelecionaveis.length > 0 && itensFiltradosSelecionaveis.every(i => sel.has(i.ean))
   const algumFiltradoSel = itensFiltrados.some(i => sel.has(i.ean))
 
-  const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || filtroDestaque !== 'ALL' || busca !== ''
+  const temFiltro = filtroStatus !== 'ALL' || filtroBU.size > 0 || filtroDestaque !== 'ALL' || filtroAbc !== 'ALL' || busca !== ''
 
   const toggleBU = bu => setFiltroBU(prev => {
     const n = new Set(prev)
@@ -244,7 +269,7 @@ export default function Portfolio({ session, periodo }) {
     return n
   })
 
-  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU(new Set()); setFiltroDestaque('ALL'); setBusca('') }
+  const limparFiltros = () => { setFiltroStatus('ALL'); setFiltroBU(new Set()); setFiltroDestaque('ALL'); setFiltroAbc('ALL'); setBusca('') }
 
   // Contagem de selecionados por BU
   const selPorBU = useMemo(() => {
@@ -395,6 +420,23 @@ export default function Portfolio({ session, periodo }) {
           </button>
         </div>
 
+        {/* Curva ABC: pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-400 w-14 flex-shrink-0">Curva ABC</span>
+          {[
+            { key: 'A', ativoCls: 'bg-emerald-500 text-white border-emerald-500', inativoCls: 'bg-emerald-50 text-emerald-700' },
+            { key: 'B', ativoCls: 'bg-amber-500 text-white border-amber-500',     inativoCls: 'bg-amber-50 text-amber-700' },
+            { key: 'C', ativoCls: 'bg-gray-500 text-white border-gray-500',       inativoCls: 'bg-gray-100 text-gray-700' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setFiltroAbc(filtroAbc === f.key ? 'ALL' : f.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                filtroAbc === f.key ? f.ativoCls : `${f.inativoCls} border-transparent hover:opacity-80`
+              }`}>
+              Curva {f.key} ({contagemAbc[f.key]})
+            </button>
+          ))}
+        </div>
+
         {/* Busca + limpar */}
         <div className="flex gap-2 items-center">
           <span className="text-xs font-semibold text-gray-400 w-14 flex-shrink-0">Busca</span>
@@ -447,6 +489,13 @@ export default function Portfolio({ session, periodo }) {
                 label={filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
                 cor={filtroDestaque === 'sortimento' ? '#8b5cf6' : '#f97316'}
                 onRemove={() => setFiltroDestaque('ALL')}
+              />
+            )}
+            {filtroAbc !== 'ALL' && (
+              <FilterChip
+                label={`Curva ${filtroAbc}`}
+                cor={filtroAbc === 'A' ? '#059669' : filtroAbc === 'B' ? '#d97706' : '#6b7280'}
+                onRemove={() => setFiltroAbc('ALL')}
               />
             )}
             {busca && (
@@ -569,6 +618,7 @@ export default function Portfolio({ session, periodo }) {
                             {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
                           </span>
                         )}
+                        <CurvaAbcBadge curva={item.curva_abc} />
                         <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
                       </div>
                       {item.fator_caixa > 1 && <div className="text-xs text-gray-400 mt-0.5">{item.fator_caixa} un/cx</div>}

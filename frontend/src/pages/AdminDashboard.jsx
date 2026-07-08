@@ -20,6 +20,22 @@ const STATUS_META = {
   nunca_comprou: { label: 'Nunca Comprou', cor: 'bg-purple-500',  texto: 'text-purple-700',  fundo: 'bg-purple-50' },
 }
 
+const CURVA_ABC_CFG = {
+  A: 'bg-emerald-600 text-white',
+  B: 'bg-amber-500 text-white',
+  C: 'bg-gray-400 text-white',
+}
+
+function CurvaAbcBadge({ curva }) {
+  if (!curva) return null
+  return (
+    <span title={`Curva ABC: ${curva}`}
+      className={`inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold shrink-0 ${CURVA_ABC_CFG[curva] || 'bg-gray-300 text-gray-700'}`}>
+      {curva}
+    </span>
+  )
+}
+
 function PctColor(pct) {
   if (pct >= 70) return 'text-emerald-600'
   if (pct >= 40) return 'text-amber-600'
@@ -252,6 +268,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
   const [filtroBU, setFiltroBU] = useState('ALL')
   const [filtroStatus, setFiltroStatus] = useState('ALL')
   const [filtroDestaque, setFiltroDestaque] = useState('ALL') // 'ALL' | 'sortimento' | 'novo'
+  const [filtroAbc, setFiltroAbc] = useState('ALL') // 'ALL' | 'A' | 'B' | 'C'
   const [busca, setBusca] = useState('')
   const [sel, setSel] = useState(new Set())
   const [vista, setVista] = useState('lista') // 'lista' | 'pedido' | 'cadastro'
@@ -290,9 +307,16 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
     if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
     if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
     if (filtroDestaque === 'novo' && !i.is_novo) return false
+    if (filtroAbc !== 'ALL' && i.curva_abc !== filtroAbc) return false
     if (busca && !(i.produto || '').toLowerCase().includes(busca.toLowerCase()) && !(i.ean || '').includes(busca)) return false
     return true
-  }), [itens, filtroBU, filtroStatus, filtroDestaque, busca])
+  }), [itens, filtroBU, filtroStatus, filtroDestaque, filtroAbc, busca])
+
+  const contagemAbc = useMemo(() => ({
+    A: itens.filter(i => i.curva_abc === 'A').length,
+    B: itens.filter(i => i.curva_abc === 'B').length,
+    C: itens.filter(i => i.curva_abc === 'C').length,
+  }), [itens])
 
   const contagemDestaque = useMemo(() => ({
     sortimento: itens.filter(i => i.is_sortimento).length,
@@ -301,9 +325,9 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
 
   const itensSel = itens.filter(i => sel.has(i.ean))
   const itensSelOcultos = itensSel.filter(i => !itensFiltrados.find(f => f.ean === i.ean))
-  const temFiltro = filtroBU !== 'ALL' || filtroStatus !== 'ALL' || filtroDestaque !== 'ALL' || busca !== ''
+  const temFiltro = filtroBU !== 'ALL' || filtroStatus !== 'ALL' || filtroDestaque !== 'ALL' || filtroAbc !== 'ALL' || busca !== ''
 
-  const limparFiltros = () => { setFiltroBU('ALL'); setFiltroStatus('ALL'); setFiltroDestaque('ALL'); setBusca('') }
+  const limparFiltros = () => { setFiltroBU('ALL'); setFiltroStatus('ALL'); setFiltroDestaque('ALL'); setFiltroAbc('ALL'); setBusca('') }
 
   const todosSelecionados = itensFiltrados.length > 0 && itensFiltrados.every(i => sel.has(i.ean))
 
@@ -486,6 +510,24 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
               ))}
             </div>
 
+            {/* Curva ABC pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Curva ABC</span>
+              {[
+                { key: 'A', cls: 'bg-emerald-100 text-emerald-700' },
+                { key: 'B', cls: 'bg-amber-100 text-amber-700' },
+                { key: 'C', cls: 'bg-gray-200 text-gray-700' },
+              ].map(f => (
+                <button key={f.key}
+                  onClick={() => setFiltroAbc(filtroAbc === f.key ? 'ALL' : f.key)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border-2 ${
+                    filtroAbc === f.key ? 'border-[#1e3a5f] shadow-sm' : 'border-transparent'
+                  } ${f.cls}`}>
+                  Curva {f.key} <span className="opacity-60">({contagemAbc[f.key]})</span>
+                </button>
+              ))}
+            </div>
+
             {/* Busca + seleção BU */}
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-gray-400 w-14 shrink-0">Busca</span>
@@ -542,6 +584,12 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                 }`}>
                   {filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
                   <button onClick={() => setFiltroDestaque('ALL')} className="font-bold opacity-70 hover:opacity-100">✕</button>
+                </span>
+              )}
+              {filtroAbc !== 'ALL' && (
+                <span className="flex items-center gap-1.5 bg-gray-100 border border-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded-full">
+                  Curva {filtroAbc}
+                  <button onClick={() => setFiltroAbc('ALL')} className="font-bold opacity-70 hover:opacity-100">✕</button>
                 </span>
               )}
               {busca && (
@@ -611,6 +659,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                                 {item.is_sortimento && <span className="w-1.5 h-4 rounded-full bg-violet-500" />}
                               </span>
                             )}
+                            <CurvaAbcBadge curva={item.curva_abc} />
                             <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
                           </div>
                         </td>
@@ -1223,7 +1272,10 @@ function EstoqueAdmin({ token }) {
                 <tr key={item.cd_prod} className={`hover:bg-gray-50 ${item.estoque_matriz <= 0 && item.estoque_filial <= 0 ? 'bg-red-50/50' : ''}`}>
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.ean}</td>
                   <td className="px-4 py-2.5 text-gray-800 max-w-md">
-                    <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                    <div className="flex items-center gap-1.5">
+                      <CurvaAbcBadge curva={item.curva_abc} />
+                      <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
+                    </div>
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${BU_COR_P[item.cd_secao] ? '' : 'bg-gray-100 text-gray-600'}`}
