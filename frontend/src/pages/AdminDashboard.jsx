@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -763,6 +763,12 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
   const [loadingResumo, setLoadingResumo] = useState(false)
   const [erroResumo, setErroResumo] = useState('')
   const [subTab, setSubTab] = useState('ranking')
+  const [incluirAvista, setIncluirAvista] = useState(false)
+  const [savingAvista, setSavingAvista] = useState(false)
+
+  useEffect(() => {
+    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
+  }, [token])
 
   useEffect(() => {
     adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data)).catch(() => {})
@@ -772,7 +778,18 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
       .then(r => setResumo(r.data))
       .catch(e => setErroResumo(e.response?.data?.detail || `Erro ${e.response?.status || ''}: ${e.message}`))
       .finally(() => setLoadingResumo(false))
-  }, [token, mes, ano])
+  }, [token, mes, ano, incluirAvista])
+
+  const toggleIncluirAvista = async () => {
+    const novo = !incluirAvista
+    setSavingAvista(true)
+    try {
+      await adminSetProgramaConfig(token, novo)
+      setIncluirAvista(novo)
+    } finally {
+      setSavingAvista(false)
+    }
+  }
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -805,6 +822,30 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 text-sm text-blue-700">
         Meta = faturamento de {ano - 1} no mesmo mês + 15%, calculada individualmente por cliente e BU.
+      </div>
+
+      {/* Flag: incluir prazo A VISTA - (4 DIAS) no faturamento */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center gap-4">
+        <button
+          onClick={toggleIncluirAvista}
+          disabled={savingAvista}
+          className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
+            incluirAvista ? 'bg-amber-500' : 'bg-gray-200'
+          } disabled:opacity-50`}>
+          <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${
+            incluirAvista ? 'left-5' : 'left-0.5'
+          }`} />
+        </button>
+        <div>
+          <p className="text-sm font-medium text-gray-800">
+            Contar pedidos "A VISTA - (4 DIAS)" no faturamento do programa
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {incluirAvista
+              ? 'Ativado: esses pedidos internos de complemento contam para meta e ganho de todos os clientes.'
+              : 'Desativado (padrão): esses pedidos são excluídos do cálculo, pois são feitos internamente para completar mínimos.'}
+          </p>
+        </div>
       </div>
 
       {/* Sub-tabs */}
