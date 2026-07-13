@@ -755,7 +755,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
 const BU_PROGRAMA = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 const BU_LABELS_P = { LMP_CASA: 'HC · Home Care', AL_NUT: 'NT · Nutrição', LMP_CUPE: 'PC · Personal Care', HGPER_BB: 'BW · Beleza' }
 
-function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
+function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirAvista }) {
   const { mes, ano } = periodo
   const [execucao, setExecucao] = useState({})
   const [savingExec, setSavingExec] = useState({})
@@ -772,7 +772,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
       .then(r => setResumo(r.data))
       .catch(e => setErroResumo(e.response?.data?.detail || `Erro ${e.response?.status || ''}: ${e.message}`))
       .finally(() => setLoadingResumo(false))
-  }, [token, mes, ano])
+  }, [token, mes, ano, incluirAvista])
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -1420,20 +1420,18 @@ function SortimentoEansAdmin({ token }) {
 }
 
 // ─── Gerenciamento de Senhas ───────────────────────────────────────────────────
-function SenhasAdmin({ token, clientes }) {
+function SenhasAdmin({ token, clientes, incluirAvista, setIncluirAvista }) {
   const [senhasSet, setSenhasSet] = useState(new Set())
   const [busca, setBusca] = useState('')
   const [senhaForm, setSenhaForm] = useState({}) // cnpj_raiz -> valor digitado
   const [salvando, setSalvando] = useState({})
   const [msg, setMsg] = useState({})
-  const [incluirAvista, setIncluirAvista] = useState(false)
   const [savingAvista, setSavingAvista] = useState(false)
 
   useEffect(() => {
     adminGetSenhas(token).then(r => {
       setSenhasSet(new Set(r.data.map(s => s.cnpj_raiz)))
     })
-    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
   }, [token])
 
   const toggleIncluirAvista = async () => {
@@ -1596,6 +1594,7 @@ export default function AdminDashboard({ token, onLogout }) {
   const [clienteSelecionado, setClienteSelecionado] = useState(null)
   const [busca, setBusca] = useState('')
   const [ordenar, setOrdenar] = useState('pct_desc')
+  const [incluirAvista, setIncluirAvista] = useState(false)
 
   // Carrega clientes apenas uma vez
   useEffect(() => {
@@ -1603,9 +1602,10 @@ export default function AdminDashboard({ token, onLogout }) {
       .then(r => setClientes(r.data))
       .catch(e => setError(e.response?.data?.detail || 'Erro ao carregar dados'))
       .finally(() => setLoading(false))
+    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
   }, [token])
 
-  // Carrega resumo e metas sempre que o período mudar
+  // Carrega resumo e metas sempre que o período mudar (ou a flag Rede for alterada)
   useEffect(() => {
     if (loading) return
     setLoadingResumo(true)
@@ -1621,7 +1621,7 @@ export default function AdminDashboard({ token, onLogout }) {
       })
       setMetasMap(map)
     }).catch(() => {}).finally(() => setLoadingResumo(false))
-  }, [token, periodo, loading])
+  }, [token, periodo, loading, incluirAvista])
 
   const ranking = useMemo(() => {
     return clientes.map(c => {
@@ -1845,7 +1845,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'programa' && (
-          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} />
+          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} incluirAvista={incluirAvista} />
         )}
 
         {tab === 'pedidos' && (
@@ -1861,7 +1861,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'senhas' && (
-          <SenhasAdmin token={token} clientes={clientes} />
+          <SenhasAdmin token={token} clientes={clientes} incluirAvista={incluirAvista} setIncluirAvista={setIncluirAvista} />
         )}
 
         {tab === 'clientes' && (
