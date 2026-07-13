@@ -96,7 +96,10 @@ def get_programa(
 
     ponto_extra = bool(execucao["ponto_extra"]) if execucao else False
     planograma  = bool(execucao["planograma"])  if execucao else False
-    incluir_avista = _get_incluir_avista()
+    # /programa e compartilhado por cliente e admin (mesma rota getPrograma) --
+    # a flag "Rede" so vale para telas exclusivas do admin, entao aqui o prazo
+    # A VISTA - (4 DIAS) sempre fica excluido.
+    incluir_avista = False
 
     sql_fat  = _sql_faturado(ph, incluir_avista)
     sql_sort = f"""

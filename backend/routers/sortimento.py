@@ -3,9 +3,14 @@ from database import get_connection
 from datetime import date
 from routers.metas import get_db
 from curva_abc import get_curva_abc_map
-from programa_config import get_incluir_avista, filtro_avista
+from programa_config import filtro_avista
 
 router = APIRouter()
+
+# Endpoints deste arquivo sao compartilhados por cliente e admin (mesma rota
+# getSortimento usada no Portfolio do cliente e no relatorio do admin).
+# A flag "Rede" so deve afetar telas exclusivas do admin -- aqui o prazo
+# A VISTA - (4 DIAS) sempre fica excluido, independente da flag.
 
 
 @router.get("/sortimento")
@@ -22,7 +27,7 @@ def get_sortimento(
     ids = [int(x.strip()) for x in cd_cliens.split(",")]
     placeholders = ",".join("?" * len(ids))
     min_unidades = n_lojas * 3
-    incluir_avista = get_incluir_avista()
+    incluir_avista = False
 
     # Q1: Vendas do período — faturado (nota) + pedidos em aberto (it_pedv)
     sql_vendas = f"""

@@ -1,9 +1,14 @@
 import time
 from database import get_connection
-from programa_config import get_incluir_avista, filtro_avista
+from programa_config import filtro_avista
 
-_CACHE = {"map": {}, "ts": 0, "incluir_avista": None}
+_CACHE = {"map": {}, "ts": 0}
 _TTL_SECONDS = 6 * 60 * 60  # 6 horas
+
+# A curva ABC e exibida tanto para o cliente (Portfolio) quanto para o admin
+# (Estoque), entao sempre exclui o prazo A VISTA - (4 DIAS), ignorando a
+# flag "Rede" (que so vale para telas exclusivas do admin).
+_INCLUIR_AVISTA = False
 
 
 def _sql(incluir_avista: bool) -> str:
@@ -54,20 +59,17 @@ FROM ranked
 
 def get_curva_abc_map() -> dict:
     """cd_prod -> 'A'|'B'|'C', calculado sobre faturamento Unilever dos ultimos 12 meses.
-    Cacheado em memoria por _TTL_SECONDS (ou ate a flag incluir_avista mudar)."""
-    incluir_avista = get_incluir_avista()
+    Cacheado em memoria por _TTL_SECONDS."""
     agora = time.time()
-    if (_CACHE["map"] and (agora - _CACHE["ts"]) < _TTL_SECONDS
-            and _CACHE["incluir_avista"] == incluir_avista):
+    if _CACHE["map"] and (agora - _CACHE["ts"]) < _TTL_SECONDS:
         return _CACHE["map"]
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(_sql(incluir_avista))
+    cur.execute(_sql(_INCLUIR_AVISTA))
     mapa = {r.cd_prod: r.curva_abc for r in cur.fetchall()}
     conn.close()
 
     _CACHE["map"] = mapa
     _CACHE["ts"] = agora
-    _CACHE["incluir_avista"] = incluir_avista
     return mapa

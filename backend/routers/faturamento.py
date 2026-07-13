@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from database import get_connection
-from programa_config import get_incluir_avista, filtro_avista
+from programa_config import filtro_avista
 
 router = APIRouter()
+
+# /faturamento e usado apenas pelo cliente -- prazo A VISTA - (4 DIAS)
+# sempre fica excluido aqui, independente da flag "Rede" (admin-only).
 
 
 def _vl_expr(alias='in2'):
@@ -12,7 +15,7 @@ def _vl_expr(alias='in2'):
 
 
 def _base_joins(placeholders):
-    incluir_avista = get_incluir_avista()
+    incluir_avista = False
     return f"""
         FROM ped_vda pv
         JOIN nota n      ON n.nu_ped  = pv.nu_ped AND n.cd_emp = pv.cd_emp

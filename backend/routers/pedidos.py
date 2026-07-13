@@ -4,6 +4,10 @@ from curva_abc import get_curva_abc_map
 from programa_config import get_incluir_avista, filtro_avista
 import os
 
+# Endpoints /pedidos* (sem prefixo /admin/) sao usados pelo cliente -- prazo
+# A VISTA - (4 DIAS) sempre fica excluido, independente da flag "Rede".
+# Endpoints /admin/pedidos-* respeitam a flag normalmente.
+
 router = APIRouter()
 
 
@@ -26,7 +30,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
     """Resumo por BU: faturado no mês atual vs em aberto."""
     ids = [int(x.strip()) for x in cd_cliens.split(",")]
     ph = ",".join("?" * len(ids))
-    incluir_avista = get_incluir_avista()
+    incluir_avista = False
 
     sql_fat = f"""
         SELECT s.cd_secao,
