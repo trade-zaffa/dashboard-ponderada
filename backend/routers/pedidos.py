@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query, Header
 from database import get_connection
 from curva_abc import get_curva_abc_map
+from programa_config import get_incluir_avista, filtro_avista
 import os
+
+# Endpoints /pedidos* (sem prefixo /admin/) sao usados pelo cliente -- prazo
+# A VISTA - (4 DIAS) sempre fica excluido, independente da flag "Rede".
+# Endpoints /admin/pedidos-* respeitam a flag normalmente.
 
 router = APIRouter()
 
@@ -25,6 +30,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
     """Resumo por BU: faturado no mês atual vs em aberto."""
     ids = [int(x.strip()) for x in cd_cliens.split(",")]
     ph = ",".join("?" * len(ids))
+    incluir_avista = False
 
     sql_fat = f"""
         SELECT s.cd_secao,
@@ -35,6 +41,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
         JOIN produto p   ON p.cd_prod = in2.cd_prod
         JOIN linha l     ON l.cd_linha = p.cd_linha
         JOIN secao s     ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({ph})
           AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
           AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
@@ -42,6 +49,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          {filtro_avista(incluir_avista)}
           AND MONTH(n.dt_emis) = MONTH(GETDATE())
           AND YEAR(n.dt_emis) = YEAR(GETDATE())
         GROUP BY s.cd_secao
@@ -56,6 +64,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
         JOIN produto p  ON p.cd_prod = ip.cd_prod
         JOIN linha l    ON l.cd_linha = p.cd_linha
         JOIN secao s    ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({ph})
           AND pv.cfop IN ('5101','5102','5405','5922','6102')
           AND pv.situacao = 'AB'
@@ -63,6 +72,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          {filtro_avista(incluir_avista)}
           AND MONTH(pv.dt_cad) = MONTH(GETDATE())
           AND YEAR(pv.dt_cad) = YEAR(GETDATE())
         GROUP BY s.cd_secao
@@ -317,8 +327,9 @@ def admin_pedidos_abertos_mes(authorization: str = Header(None)):
 def admin_pedidos_faturados_mes(authorization: str = Header(None)):
     """Faturamento do mês atual — todos os clientes Ponderada."""
     _verificar_admin(authorization)
+    incluir_avista = get_incluir_avista()
 
-    sql = """
+    sql = f"""
         SELECT
             c.nome                                                         AS cliente,
             n.nu_nf,
@@ -341,6 +352,7 @@ def admin_pedidos_faturados_mes(authorization: str = Header(None)):
         JOIN secao s           ON s.cd_secao = l.cd_secao
         JOIN cliente c         ON c.cd_clien = pv.cd_clien
         JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE csf.CdFabric = 'UNILEV'
           AND csf.RamAtiv IN ('33  ','34  ')
           AND c.ativo = 1
@@ -350,6 +362,7 @@ def admin_pedidos_faturados_mes(authorization: str = Header(None)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          {filtro_avista(incluir_avista)}
           AND MONTH(n.dt_emis) = MONTH(GETDATE())
           AND YEAR(n.dt_emis) = YEAR(GETDATE())
         ORDER BY c.nome, n.dt_emis DESC, s.cd_secao

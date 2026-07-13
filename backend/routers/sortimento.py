@@ -3,8 +3,14 @@ from database import get_connection
 from datetime import date
 from routers.metas import get_db
 from curva_abc import get_curva_abc_map
+from programa_config import filtro_avista
 
 router = APIRouter()
+
+# Endpoints deste arquivo sao compartilhados por cliente e admin (mesma rota
+# getSortimento usada no Portfolio do cliente e no relatorio do admin).
+# A flag "Rede" so deve afetar telas exclusivas do admin -- aqui o prazo
+# A VISTA - (4 DIAS) sempre fica excluido, independente da flag.
 
 
 @router.get("/sortimento")
@@ -21,6 +27,7 @@ def get_sortimento(
     ids = [int(x.strip()) for x in cd_cliens.split(",")]
     placeholders = ",".join("?" * len(ids))
     min_unidades = n_lojas * 3
+    incluir_avista = False
 
     # Q1: Vendas do período — faturado (nota) + pedidos em aberto (it_pedv)
     sql_vendas = f"""
@@ -40,10 +47,12 @@ def get_sortimento(
             FROM ped_vda pv
             JOIN nota n ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
             JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
                 AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
                 AND YEAR(n.dt_emis) = {ano} AND MONTH(n.dt_emis) = {mes}
 
             UNION ALL
@@ -51,10 +60,12 @@ def get_sortimento(
             SELECT ip.cd_prod, ip.qtde * ip.fator_est_ped AS unidades
             FROM ped_vda pv
             JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND pv.cfop IN ('5101','5102','5405','5922','6102')
                 AND pv.situacao = 'AB'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
                 AND YEAR(pv.dt_cad) = {ano} AND MONTH(pv.dt_cad) = {mes}
         ) v
         JOIN produto p ON p.cd_prod = v.cd_prod
@@ -95,20 +106,24 @@ def get_sortimento(
             FROM ped_vda pv
             JOIN nota n ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
             JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
                 AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
 
             UNION ALL
 
             SELECT ip.cd_prod
             FROM ped_vda pv
             JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND pv.cfop IN ('5101','5102','5405','5922','6102')
                 AND pv.situacao = 'AB'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
         ) v
     """
 
@@ -121,12 +136,14 @@ def get_sortimento(
         JOIN produto p   ON p.cd_prod = in2.cd_prod
         JOIN linha l     ON l.cd_linha = p.cd_linha
         JOIN secao s     ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({placeholders})
           AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
           AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
           AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
+          {filtro_avista(incluir_avista)}
         GROUP BY in2.cd_prod
     """
 

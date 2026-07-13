@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from database import get_connection
+from programa_config import filtro_avista
 
 router = APIRouter()
+
+# /faturamento e usado apenas pelo cliente -- prazo A VISTA - (4 DIAS)
+# sempre fica excluido aqui, independente da flag "Rede" (admin-only).
 
 
 def _vl_expr(alias='in2'):
@@ -11,6 +15,7 @@ def _vl_expr(alias='in2'):
 
 
 def _base_joins(placeholders):
+    incluir_avista = False
     return f"""
         FROM ped_vda pv
         JOIN nota n      ON n.nu_ped  = pv.nu_ped AND n.cd_emp = pv.cd_emp
@@ -18,6 +23,7 @@ def _base_joins(placeholders):
         JOIN produto p   ON p.cd_prod  = in2.cd_prod
         JOIN linha l     ON l.cd_linha = p.cd_linha
         JOIN secao s     ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({placeholders})
           AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
           AND n.situacao IN ('AB','DP')
@@ -26,6 +32,7 @@ def _base_joins(placeholders):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          {filtro_avista(incluir_avista)}
     """
 
 

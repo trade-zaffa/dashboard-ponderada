@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -755,7 +755,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
 const BU_PROGRAMA = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 const BU_LABELS_P = { LMP_CASA: 'HC · Home Care', AL_NUT: 'NT · Nutrição', LMP_CUPE: 'PC · Personal Care', HGPER_BB: 'BW · Beleza' }
 
-function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
+function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirAvista }) {
   const { mes, ano } = periodo
   const [execucao, setExecucao] = useState({})
   const [savingExec, setSavingExec] = useState({})
@@ -772,7 +772,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
       .then(r => setResumo(r.data))
       .catch(e => setErroResumo(e.response?.data?.detail || `Erro ${e.response?.status || ''}: ${e.message}`))
       .finally(() => setLoadingResumo(false))
-  }, [token, mes, ano])
+  }, [token, mes, ano, incluirAvista])
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -1420,18 +1420,30 @@ function SortimentoEansAdmin({ token }) {
 }
 
 // ─── Gerenciamento de Senhas ───────────────────────────────────────────────────
-function SenhasAdmin({ token, clientes }) {
+function SenhasAdmin({ token, clientes, incluirAvista, setIncluirAvista }) {
   const [senhasSet, setSenhasSet] = useState(new Set())
   const [busca, setBusca] = useState('')
   const [senhaForm, setSenhaForm] = useState({}) // cnpj_raiz -> valor digitado
   const [salvando, setSalvando] = useState({})
   const [msg, setMsg] = useState({})
+  const [savingAvista, setSavingAvista] = useState(false)
 
   useEffect(() => {
     adminGetSenhas(token).then(r => {
       setSenhasSet(new Set(r.data.map(s => s.cnpj_raiz)))
     })
   }, [token])
+
+  const toggleIncluirAvista = async () => {
+    const novo = !incluirAvista
+    setSavingAvista(true)
+    try {
+      await adminSetProgramaConfig(token, novo)
+      setIncluirAvista(novo)
+    } finally {
+      setSavingAvista(false)
+    }
+  }
 
   const clientesFiltrados = clientes.filter(c =>
     c.nome.toLowerCase().includes(busca.toLowerCase()) || c.cnpj_raiz.includes(busca)
@@ -1472,10 +1484,25 @@ function SenhasAdmin({ token, clientes }) {
             {senhasSet.size} de {clientes.length} clientes com senha cadastrada
           </p>
         </div>
-        <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar cliente..."
-          autoComplete="off"
-          className="border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-60" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleIncluirAvista}
+            disabled={savingAvista}
+            title={incluirAvista
+              ? 'Rede ativado: pedidos "A VISTA - (4 DIAS)" contam no faturamento/sortimento do sistema.'
+              : 'Rede desativado (padrão): esses pedidos são excluídos por serem complementos internos.'}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              incluirAvista
+                ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            } disabled:opacity-50`}>
+            Rede {incluirAvista ? '✓' : ''}
+          </button>
+          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar cliente..."
+            autoComplete="off"
+            className="border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-60" />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1567,6 +1594,7 @@ export default function AdminDashboard({ token, onLogout }) {
   const [clienteSelecionado, setClienteSelecionado] = useState(null)
   const [busca, setBusca] = useState('')
   const [ordenar, setOrdenar] = useState('pct_desc')
+  const [incluirAvista, setIncluirAvista] = useState(false)
 
   // Carrega clientes apenas uma vez
   useEffect(() => {
@@ -1574,9 +1602,10 @@ export default function AdminDashboard({ token, onLogout }) {
       .then(r => setClientes(r.data))
       .catch(e => setError(e.response?.data?.detail || 'Erro ao carregar dados'))
       .finally(() => setLoading(false))
+    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
   }, [token])
 
-  // Carrega resumo e metas sempre que o período mudar
+  // Carrega resumo e metas sempre que o período mudar (ou a flag Rede for alterada)
   useEffect(() => {
     if (loading) return
     setLoadingResumo(true)
@@ -1592,7 +1621,7 @@ export default function AdminDashboard({ token, onLogout }) {
       })
       setMetasMap(map)
     }).catch(() => {}).finally(() => setLoadingResumo(false))
-  }, [token, periodo, loading])
+  }, [token, periodo, loading, incluirAvista])
 
   const ranking = useMemo(() => {
     return clientes.map(c => {
@@ -1816,7 +1845,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'programa' && (
-          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} />
+          <ProgramaAdmin token={token} clientes={clientes} periodo={periodo} onSelecionarCliente={setClienteSelecionado} incluirAvista={incluirAvista} />
         )}
 
         {tab === 'pedidos' && (
@@ -1832,7 +1861,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'senhas' && (
-          <SenhasAdmin token={token} clientes={clientes} />
+          <SenhasAdmin token={token} clientes={clientes} incluirAvista={incluirAvista} setIncluirAvista={setIncluirAvista} />
         )}
 
         {tab === 'clientes' && (

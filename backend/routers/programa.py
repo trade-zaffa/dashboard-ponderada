@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Header, Query
 from pydantic import BaseModel
 from database import get_connection
 from routers.metas import get_db, _check_admin
+from programa_config import get_incluir_avista as _get_incluir_avista, set_incluir_avista, filtro_avista as _filtro_avista
 
 router = APIRouter()
 
@@ -38,7 +39,7 @@ def _sortimento_faixa(pct: float) -> float:
     return 0.0
 
 
-def _sql_faturado(ph: str) -> str:
+def _sql_faturado(ph: str, incluir_avista: bool = False) -> str:
     return f"""
         SELECT s.cd_secao,
                SUM(CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
@@ -58,7 +59,7 @@ def _sql_faturado(ph: str) -> str:
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
-          AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
+          {_filtro_avista(incluir_avista)}
           AND MONTH(n.dt_emis) = ? AND YEAR(n.dt_emis) = ?
         GROUP BY s.cd_secao
     """
@@ -95,8 +96,12 @@ def get_programa(
 
     ponto_extra = bool(execucao["ponto_extra"]) if execucao else False
     planograma  = bool(execucao["planograma"])  if execucao else False
+    # /programa e compartilhado por cliente e admin (mesma rota getPrograma) --
+    # a flag "Rede" so vale para telas exclusivas do admin, entao aqui o prazo
+    # A VISTA - (4 DIAS) sempre fica excluido.
+    incluir_avista = False
 
-    sql_fat  = _sql_faturado(ph)
+    sql_fat  = _sql_faturado(ph, incluir_avista)
     sql_sort = f"""
         WITH base AS (
             SELECT DISTINCT p.cd_prod, s.cd_secao
@@ -123,7 +128,7 @@ def get_programa(
               AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
               AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
-              AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
+              {_filtro_avista(incluir_avista)}
               AND MONTH(n.dt_emis) = ? AND YEAR(n.dt_emis) = ?
             GROUP BY in2.cd_prod
         )
@@ -289,6 +294,8 @@ def get_programa_resumo(
     }
     db.close()
 
+    incluir_avista = _get_incluir_avista()
+
     # ── 2. Faturamento atual + anterior para todos os clientes ponderada ──────
     sql_fat_all = f"""
         SELECT
@@ -320,7 +327,7 @@ def get_programa_resumo(
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
-          AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
+          {_filtro_avista(incluir_avista)}
           AND (
             (YEAR(n.dt_emis) = {ano}          AND MONTH(n.dt_emis) = {mes}) OR
             (YEAR(n.dt_emis) = {ano_anterior} AND MONTH(n.dt_emis) = {mes})
@@ -364,7 +371,7 @@ def get_programa_resumo(
               AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
               AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
-              AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')
+              {_filtro_avista(incluir_avista)}
               AND MONTH(n.dt_emis) = {mes} AND YEAR(n.dt_emis) = {ano}
             GROUP BY LEFT(REPLACE(REPLACE(REPLACE(REPLACE(c.cgc_cpf,'.',''),'-',''),'/',''),' ',''), 8), in2.cd_prod
         )
@@ -496,3 +503,20 @@ def set_programa_execucao(body: ExecucaoInput, authorization: str = Header(None)
     db.commit()
     db.close()
     return {"ok": True}
+
+
+class ConfigAvistaInput(BaseModel):
+    incluir_avista: bool
+
+
+@router.get("/admin/programa-config")
+def get_programa_config(authorization: str = Header(None)):
+    _check_admin(authorization)
+    return {"incluir_avista": _get_incluir_avista()}
+
+
+@router.post("/admin/programa-config")
+def set_programa_config(body: ConfigAvistaInput, authorization: str = Header(None)):
+    _check_admin(authorization)
+    set_incluir_avista(body.incluir_avista)
+    return {"ok": True, "incluir_avista": body.incluir_avista}
