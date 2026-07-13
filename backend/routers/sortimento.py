@@ -55,10 +55,12 @@ def get_sortimento(
             SELECT ip.cd_prod, ip.qtde * ip.fator_est_ped AS unidades
             FROM ped_vda pv
             JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND pv.cfop IN ('5101','5102','5405','5922','6102')
                 AND pv.situacao = 'AB'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
                 AND YEAR(pv.dt_cad) = {ano} AND MONTH(pv.dt_cad) = {mes}
         ) v
         JOIN produto p ON p.cd_prod = v.cd_prod
@@ -111,10 +113,12 @@ def get_sortimento(
             SELECT ip.cd_prod
             FROM ped_vda pv
             JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cd_clien IN ({placeholders})
                 AND pv.cfop IN ('5101','5102','5405','5922','6102')
                 AND pv.situacao = 'AB'
                 AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+                {filtro_avista(incluir_avista)}
         ) v
     """
 

@@ -129,9 +129,11 @@ def admin_sortimento_resumo(
             FROM ped_vda pv
             JOIN it_pedv ip ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
             JOIN cliente c ON c.cd_clien = pv.cd_clien
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE pv.cfop IN ('5101','5102','5405','5922','6102')
               AND pv.situacao = 'AB'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+              {filtro_avista(incluir_avista)}
               AND YEAR(pv.dt_cad) = {ano} AND MONTH(pv.dt_cad) = {mes}
         ),
         vendas_mes AS (

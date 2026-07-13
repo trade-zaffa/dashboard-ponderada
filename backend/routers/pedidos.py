@@ -60,6 +60,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
         JOIN produto p  ON p.cd_prod = ip.cd_prod
         JOIN linha l    ON l.cd_linha = p.cd_linha
         JOIN secao s    ON s.cd_secao = l.cd_secao
+        LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
         WHERE pv.cd_clien IN ({ph})
           AND pv.cfop IN ('5101','5102','5405','5922','6102')
           AND pv.situacao = 'AB'
@@ -67,6 +68,7 @@ def get_pedidos_abertos(cd_cliens: str = Query(...)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+          {filtro_avista(incluir_avista)}
           AND MONTH(pv.dt_cad) = MONTH(GETDATE())
           AND YEAR(pv.dt_cad) = YEAR(GETDATE())
         GROUP BY s.cd_secao
