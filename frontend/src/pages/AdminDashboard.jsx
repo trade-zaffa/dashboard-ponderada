@@ -763,12 +763,6 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
   const [loadingResumo, setLoadingResumo] = useState(false)
   const [erroResumo, setErroResumo] = useState('')
   const [subTab, setSubTab] = useState('ranking')
-  const [incluirAvista, setIncluirAvista] = useState(false)
-  const [savingAvista, setSavingAvista] = useState(false)
-
-  useEffect(() => {
-    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
-  }, [token])
 
   useEffect(() => {
     adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data)).catch(() => {})
@@ -778,18 +772,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
       .then(r => setResumo(r.data))
       .catch(e => setErroResumo(e.response?.data?.detail || `Erro ${e.response?.status || ''}: ${e.message}`))
       .finally(() => setLoadingResumo(false))
-  }, [token, mes, ano, incluirAvista])
-
-  const toggleIncluirAvista = async () => {
-    const novo = !incluirAvista
-    setSavingAvista(true)
-    try {
-      await adminSetProgramaConfig(token, novo)
-      setIncluirAvista(novo)
-    } finally {
-      setSavingAvista(false)
-    }
-  }
+  }, [token, mes, ano])
 
   const toggleExec = async (cnpj_raiz, campo) => {
     const atual = execucao[cnpj_raiz] || { ponto_extra: false, planograma: false }
@@ -822,30 +805,6 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente }) {
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 text-sm text-blue-700">
         Meta = faturamento de {ano - 1} no mesmo mês + 15%, calculada individualmente por cliente e BU.
-      </div>
-
-      {/* Flag: incluir prazo A VISTA - (4 DIAS) no faturamento */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center gap-4">
-        <button
-          onClick={toggleIncluirAvista}
-          disabled={savingAvista}
-          className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
-            incluirAvista ? 'bg-amber-500' : 'bg-gray-200'
-          } disabled:opacity-50`}>
-          <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${
-            incluirAvista ? 'left-5' : 'left-0.5'
-          }`} />
-        </button>
-        <div>
-          <p className="text-sm font-medium text-gray-800">
-            Contar pedidos "A VISTA - (4 DIAS)" no faturamento do programa
-          </p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {incluirAvista
-              ? 'Ativado: esses pedidos internos de complemento contam para meta e ganho de todos os clientes.'
-              : 'Desativado (padrão): esses pedidos são excluídos do cálculo, pois são feitos internamente para completar mínimos.'}
-          </p>
-        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -1467,12 +1426,26 @@ function SenhasAdmin({ token, clientes }) {
   const [senhaForm, setSenhaForm] = useState({}) // cnpj_raiz -> valor digitado
   const [salvando, setSalvando] = useState({})
   const [msg, setMsg] = useState({})
+  const [incluirAvista, setIncluirAvista] = useState(false)
+  const [savingAvista, setSavingAvista] = useState(false)
 
   useEffect(() => {
     adminGetSenhas(token).then(r => {
       setSenhasSet(new Set(r.data.map(s => s.cnpj_raiz)))
     })
+    adminGetProgramaConfig(token).then(r => setIncluirAvista(r.data.incluir_avista)).catch(() => {})
   }, [token])
+
+  const toggleIncluirAvista = async () => {
+    const novo = !incluirAvista
+    setSavingAvista(true)
+    try {
+      await adminSetProgramaConfig(token, novo)
+      setIncluirAvista(novo)
+    } finally {
+      setSavingAvista(false)
+    }
+  }
 
   const clientesFiltrados = clientes.filter(c =>
     c.nome.toLowerCase().includes(busca.toLowerCase()) || c.cnpj_raiz.includes(busca)
@@ -1513,10 +1486,25 @@ function SenhasAdmin({ token, clientes }) {
             {senhasSet.size} de {clientes.length} clientes com senha cadastrada
           </p>
         </div>
-        <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar cliente..."
-          autoComplete="off"
-          className="border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-60" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleIncluirAvista}
+            disabled={savingAvista}
+            title={incluirAvista
+              ? 'Rede ativado: pedidos "A VISTA - (4 DIAS)" contam no faturamento/sortimento do sistema.'
+              : 'Rede desativado (padrão): esses pedidos são excluídos por serem complementos internos.'}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              incluirAvista
+                ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            } disabled:opacity-50`}>
+            Rede {incluirAvista ? '✓' : ''}
+          </button>
+          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar cliente..."
+            autoComplete="off"
+            className="border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-60" />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

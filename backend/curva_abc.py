@@ -1,10 +1,13 @@
 import time
 from database import get_connection
+from programa_config import get_incluir_avista, filtro_avista
 
-_CACHE = {"map": {}, "ts": 0}
+_CACHE = {"map": {}, "ts": 0, "incluir_avista": None}
 _TTL_SECONDS = 6 * 60 * 60  # 6 horas
 
-_SQL = """
+
+def _sql(incluir_avista: bool) -> str:
+    return f"""
 WITH vendas AS (
     SELECT p.cd_prod,
            SUM(CASE WHEN (in2.qtde - ISNULL(in2.qtde_dev,0)) <= 0 THEN 0
@@ -18,6 +21,7 @@ WITH vendas AS (
     JOIN secao s     ON s.cd_secao = l.cd_secao
     JOIN cliente c   ON c.cd_clien = pv.cd_clien
     JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+    LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
     WHERE csf.CdFabric = 'UNILEV'
       AND csf.RamAtiv IN ('33  ','34  ')
       AND c.ativo = 1
@@ -27,6 +31,7 @@ WITH vendas AS (
       AND p.cd_fabric = 'UNILEV'
       AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
       AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
+      {filtro_avista(incluir_avista)}
       AND n.dt_emis >= DATEADD(MONTH, -12, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1))
     GROUP BY p.cd_prod
 ),
@@ -49,17 +54,20 @@ FROM ranked
 
 def get_curva_abc_map() -> dict:
     """cd_prod -> 'A'|'B'|'C', calculado sobre faturamento Unilever dos ultimos 12 meses.
-    Cacheado em memoria por _TTL_SECONDS para evitar recalcular a cada requisicao."""
+    Cacheado em memoria por _TTL_SECONDS (ou ate a flag incluir_avista mudar)."""
+    incluir_avista = get_incluir_avista()
     agora = time.time()
-    if _CACHE["map"] and (agora - _CACHE["ts"]) < _TTL_SECONDS:
+    if (_CACHE["map"] and (agora - _CACHE["ts"]) < _TTL_SECONDS
+            and _CACHE["incluir_avista"] == incluir_avista):
         return _CACHE["map"]
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(_SQL)
+    cur.execute(_sql(incluir_avista))
     mapa = {r.cd_prod: r.curva_abc for r in cur.fetchall()}
     conn.close()
 
     _CACHE["map"] = mapa
     _CACHE["ts"] = agora
+    _CACHE["incluir_avista"] = incluir_avista
     return mapa

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Header, Query
 from pydantic import BaseModel
 from database import get_connection
 from routers.metas import get_db, _check_admin
+from programa_config import get_incluir_avista as _get_incluir_avista, set_incluir_avista, filtro_avista as _filtro_avista
 
 router = APIRouter()
 
@@ -22,31 +23,10 @@ def _init_programa_tables():
             UNIQUE(cnpj_raiz, mes, ano)
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS programa_config (
-            chave TEXT PRIMARY KEY,
-            valor TEXT NOT NULL
-        )
-    """)
     conn.commit()
     conn.close()
 
 _init_programa_tables()
-
-
-# ── Flag global: incluir pedidos "A VISTA - (4 DIAS)" no faturamento ───────────
-
-def _get_incluir_avista() -> bool:
-    db = get_db()
-    row = db.execute("SELECT valor FROM programa_config WHERE chave='incluir_avista'").fetchone()
-    db.close()
-    return bool(row) and row["valor"] == "1"
-
-
-def _filtro_avista(incluir: bool) -> str:
-    if incluir:
-        return ""
-    return "AND (pr.descricao IS NULL OR pr.descricao <> 'A VISTA - (4 DIAS)')"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -535,12 +515,5 @@ def get_programa_config(authorization: str = Header(None)):
 @router.post("/admin/programa-config")
 def set_programa_config(body: ConfigAvistaInput, authorization: str = Header(None)):
     _check_admin(authorization)
-    db = get_db()
-    db.execute(
-        """INSERT INTO programa_config (chave, valor) VALUES ('incluir_avista', ?)
-           ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor""",
-        ("1" if body.incluir_avista else "0",),
-    )
-    db.commit()
-    db.close()
+    set_incluir_avista(body.incluir_avista)
     return {"ok": True, "incluir_avista": body.incluir_avista}

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Header, Query
 from pydantic import BaseModel
 from database import get_connection
 from datetime import date
+from programa_config import get_incluir_avista, filtro_avista
 import os
 
 router = APIRouter()
@@ -77,6 +78,7 @@ def admin_sortimento_resumo(
     hoje = date.today()
     mes = mes or hoje.month
     ano = ano or hoje.year
+    incluir_avista = get_incluir_avista()
 
     sql = f"""
         WITH base AS (
@@ -112,9 +114,11 @@ def admin_sortimento_resumo(
             JOIN nota n ON n.nu_ped = pv.nu_ped AND n.cd_emp = pv.cd_emp
             JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
             JOIN cliente c ON c.cd_clien = pv.cd_clien
+            LEFT JOIN promocao pr ON pr.seq_prom = pv.seq_prom
             WHERE LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
               AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
               AND pv.tp_ped IN ('BO','SF','EX','EC','VZ','VE','PP','ZF')
+              {filtro_avista(incluir_avista)}
               AND YEAR(n.dt_emis) = {ano} AND MONTH(n.dt_emis) = {mes}
 
             UNION ALL
