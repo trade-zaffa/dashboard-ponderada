@@ -641,9 +641,10 @@ export default function Portfolio({ session, periodo }) {
                 const s = STATUS[item.status]
                 const buCfg = BU[item.cd_secao]
                 const checked = sel.has(item.ean)
+                const semEstoque = (item.estoque_matriz || 0) + (item.estoque_filial || 0) <= 0
                 return (
                   <tr key={item.ean} onClick={() => toggleItem(item.ean)}
-                    className={`border-l-4 cursor-pointer select-none transition-colors ${s.borda} ${
+                    className={`border-l-4 cursor-pointer select-none transition-colors ${semEstoque ? 'border-red-500' : s.borda} ${
                       checked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'
                     }`}>
                     <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
@@ -665,6 +666,11 @@ export default function Portfolio({ session, periodo }) {
                         <CurvaAbcBadge curva={item.curva_abc} />
                         <div className="truncate font-medium text-gray-800" title={item.produto}>{item.produto}</div>
                         <AlertaDiasBadge dias={item.dias_sem_comprar} alerta={item.alerta_estoque} />
+                        {semEstoque && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700" title="Sem estoque disponível (matriz + filial)">
+                            Sem estoque
+                          </span>
+                        )}
                       </div>
                       {item.fator_caixa > 1 && <div className="text-xs text-gray-400 mt-0.5">{item.fator_caixa} un/cx</div>}
                     </td>
