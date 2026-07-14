@@ -204,6 +204,7 @@ export default function Portfolio({ session, periodo }) {
     if (filtroBU.size > 0 && !filtroBU.has(i.cd_secao.trim())) return false
     if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
     if (filtroDestaque === 'novo' && !i.is_novo) return false
+    if (filtroDestaque === 'sortimento_curva_a' && !(i.is_sortimento || i.curva_abc === 'A')) return false
     if (filtroAbc !== 'ALL' && i.curva_abc !== filtroAbc) return false
     if (busca) {
       const q = busca.toLowerCase()
@@ -221,6 +222,7 @@ export default function Portfolio({ session, periodo }) {
   const contagemDestaque = useMemo(() => ({
     sortimento: itens.filter(i => i.is_sortimento).length,
     novo: itens.filter(i => i.is_novo).length,
+    sortimentoCurvaA: itens.filter(i => i.is_sortimento || i.curva_abc === 'A').length,
   }), [itens])
 
   // ── Seleção helpers ───────────────────────────────────────────────────────────
@@ -453,6 +455,13 @@ export default function Portfolio({ session, periodo }) {
             }`}>
             Produtos Novos ({contagemDestaque.novo})
           </button>
+          <button onClick={() => setFiltroDestaque(filtroDestaque === 'sortimento_curva_a' ? 'ALL' : 'sortimento_curva_a')}
+            title="Todos os itens de sortimento + produtos Curva A que não fazem parte do sortimento"
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              filtroDestaque === 'sortimento_curva_a' ? 'bg-teal-500 text-white border-teal-500' : 'bg-teal-50 text-teal-700 border-transparent hover:opacity-80'
+            }`}>
+            Sortimento + Curva A ({contagemDestaque.sortimentoCurvaA})
+          </button>
         </div>
 
         {/* Curva ABC: pills */}
@@ -521,8 +530,8 @@ export default function Portfolio({ session, periodo }) {
             ))}
             {filtroDestaque !== 'ALL' && (
               <FilterChip
-                label={filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
-                cor={filtroDestaque === 'sortimento' ? '#8b5cf6' : '#f97316'}
+                label={filtroDestaque === 'sortimento' ? 'Sortimento' : filtroDestaque === 'novo' ? 'Produtos Novos' : 'Sortimento + Curva A'}
+                cor={filtroDestaque === 'sortimento' ? '#8b5cf6' : filtroDestaque === 'novo' ? '#f97316' : '#14b8a6'}
                 onRemove={() => setFiltroDestaque('ALL')}
               />
             )}

@@ -320,6 +320,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
     if (filtroStatus !== 'ALL' && i.status !== filtroStatus) return false
     if (filtroDestaque === 'sortimento' && !i.is_sortimento) return false
     if (filtroDestaque === 'novo' && !i.is_novo) return false
+    if (filtroDestaque === 'sortimento_curva_a' && !(i.is_sortimento || i.curva_abc === 'A')) return false
     if (filtroAbc !== 'ALL' && i.curva_abc !== filtroAbc) return false
     if (busca && !(i.produto || '').toLowerCase().includes(busca.toLowerCase()) && !(i.ean || '').includes(busca)) return false
     return true
@@ -334,6 +335,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
   const contagemDestaque = useMemo(() => ({
     sortimento: itens.filter(i => i.is_sortimento).length,
     novo: itens.filter(i => i.is_novo).length,
+    sortimentoCurvaA: itens.filter(i => i.is_sortimento || i.curva_abc === 'A').length,
   }), [itens])
 
   const itensSel = itens.filter(i => sel.has(i.ean))
@@ -512,6 +514,7 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
               {[
                 { key: 'sortimento', label: 'Sortimento', count: contagemDestaque.sortimento, cls: 'bg-violet-100 text-violet-700' },
                 { key: 'novo',       label: 'Produtos Novos', count: contagemDestaque.novo,    cls: 'bg-orange-100 text-orange-700' },
+                { key: 'sortimento_curva_a', label: 'Sortimento + Curva A', count: contagemDestaque.sortimentoCurvaA, cls: 'bg-teal-100 text-teal-700' },
               ].map(f => (
                 <button key={f.key}
                   onClick={() => setFiltroDestaque(filtroDestaque === f.key ? 'ALL' : f.key)}
@@ -593,9 +596,11 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
               )}
               {filtroDestaque !== 'ALL' && (
                 <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
-                  filtroDestaque === 'sortimento' ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-orange-50 border-orange-200 text-orange-700'
+                  filtroDestaque === 'sortimento' ? 'bg-violet-50 border-violet-200 text-violet-700' :
+                  filtroDestaque === 'novo' ? 'bg-orange-50 border-orange-200 text-orange-700' :
+                  'bg-teal-50 border-teal-200 text-teal-700'
                 }`}>
-                  {filtroDestaque === 'sortimento' ? 'Sortimento' : 'Produtos Novos'}
+                  {filtroDestaque === 'sortimento' ? 'Sortimento' : filtroDestaque === 'novo' ? 'Produtos Novos' : 'Sortimento + Curva A'}
                   <button onClick={() => setFiltroDestaque('ALL')} className="font-bold opacity-70 hover:opacity-100">✕</button>
                 </span>
               )}
