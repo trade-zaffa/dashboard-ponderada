@@ -1662,6 +1662,24 @@ export default function AdminDashboard({ token, onLogout }) {
     return { pos, total, prog, pct: total > 0 ? Math.round(pos / total * 100) : 0 }
   }, [ranking])
 
+  // Pódium: top 3 clientes por BU, ordenado por % de EANs positivados dentro daquela BU.
+  const podiumPorBU = useMemo(() => {
+    const p = {}
+    BUS.forEach(bu => {
+      p[bu] = clientes
+        .map(c => {
+          const r = resumo[c.cnpj_raiz]?.bus?.[bu]
+          if (!r || r.total === 0) return null
+          const pct = Math.round(r.positivado / r.total * 100)
+          return { cnpj_raiz: c.cnpj_raiz, nome: c.nome, positivado: r.positivado, total: r.total, pct }
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.pct - a.pct)
+        .slice(0, 3)
+    })
+    return p
+  }, [clientes, resumo])
+
   // Anos disponíveis para seleção (atual + 2 anteriores)
   const anosDisponiveis = [hoje.getFullYear(), hoje.getFullYear() - 1, hoje.getFullYear() - 2]
 
@@ -1759,6 +1777,42 @@ export default function AdminDashboard({ token, onLogout }) {
 
         {tab === 'ranking' && (
           <div className="space-y-4">
+            {/* Pódium por BU */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {BUS.map(bu => (
+                <div key={bu} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{BU_FULL_LONG[bu]}</div>
+                  {podiumPorBU[bu].length === 0 ? (
+                    <div className="text-sm text-gray-400 text-center py-4">Sem dados</div>
+                  ) : (
+                    <div className="flex items-end justify-center gap-2">
+                      {[podiumPorBU[bu][1], podiumPorBU[bu][0], podiumPorBU[bu][2]].map((c, i) => {
+                        if (!c) return <div key={i} className="flex-1" />
+                        const pos = i === 1 ? 1 : i === 0 ? 2 : 3
+                        const cfg = {
+                          1: { h: 'h-24', bg: 'bg-amber-400', medal: '🥇', ring: 'ring-2 ring-amber-400' },
+                          2: { h: 'h-16', bg: 'bg-gray-300', medal: '🥈', ring: 'ring-2 ring-gray-300' },
+                          3: { h: 'h-10', bg: 'bg-orange-300', medal: '🥉', ring: 'ring-2 ring-orange-300' },
+                        }[pos]
+                        return (
+                          <div key={c.cnpj_raiz} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                            <span className="text-lg">{cfg.medal}</span>
+                            <div className={`w-full rounded-full overflow-hidden bg-gray-100 ${cfg.ring}`} title={c.nome}>
+                              <div className="text-[11px] font-medium text-gray-700 text-center truncate px-1 py-1">{c.nome}</div>
+                            </div>
+                            <div className={`w-full ${cfg.h} ${cfg.bg} rounded-t-md flex flex-col items-center justify-start pt-1.5`}>
+                              <span className="text-white font-bold text-sm">{c.pct}%</span>
+                              <span className="text-white/80 text-[10px]">{c.positivado}/{c.total}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
             <div className="flex gap-3 items-center">
               <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
                 placeholder="Buscar cliente..."
