@@ -651,10 +651,13 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                   {itensFiltrados.map(item => {
                     const s = STATUS_META[item.status]
                     const isSel = sel.has(item.ean)
+                    const semEstoque = (item.estoque_matriz || 0) + (item.estoque_filial || 0) <= 0
                     return (
                       <tr key={item.ean} onClick={() => toggleItem(item.ean)}
                         className={`transition-colors cursor-pointer border-l-2 ${
-                          isSel
+                          semEstoque
+                            ? `border-l-red-500 ${isSel ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`
+                            : isSel
                             ? 'bg-blue-50 border-l-[#1e3a5f] hover:bg-blue-100'
                             : item.status === 'positivado'   ? 'border-l-emerald-400 hover:bg-gray-50'
                             : item.status === 'em_progresso' ? 'border-l-amber-400 hover:bg-gray-50'
@@ -680,6 +683,11 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
                             <CurvaAbcBadge curva={item.curva_abc} />
                             <div className="truncate font-medium" title={item.produto}>{item.produto}</div>
                             <AlertaDiasBadge dias={item.dias_sem_comprar} alerta={item.alerta_estoque} />
+                            {semEstoque && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700" title="Sem estoque disponível (matriz + filial)">
+                                Sem estoque
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{BU_LABELS[item.cd_secao]} — {BU_FULL[item.cd_secao]}</td>
