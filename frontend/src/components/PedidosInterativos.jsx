@@ -9,9 +9,12 @@ const ETAPAS = {
   CRED: { label: 'Análise de Crédito',  short: 'Crédito',     cor: '#f59e0b', bg: 'bg-amber-50',   text: 'text-amber-700',   borda: 'border-amber-200',   header: 'bg-amber-50 border-amber-200',   dot: 'bg-amber-400',   badge: 'bg-amber-100 text-amber-700',   icone: '💳' },
   ERPV: { label: 'Erro no Pedido',      short: 'Erro',        cor: '#ef4444', bg: 'bg-red-50',     text: 'text-red-700',     borda: 'border-red-200',     header: 'bg-red-50 border-red-200',     dot: 'bg-red-500',     badge: 'bg-red-100 text-red-700',     icone: '❌' },
   SEM:  { label: 'Processando',         short: 'Processando', cor: '#94a3b8', bg: 'bg-slate-50',   text: 'text-slate-600',   borda: 'border-slate-200',   header: 'bg-slate-50 border-slate-200',   dot: 'bg-slate-400',   badge: 'bg-slate-100 text-slate-600',  icone: '🔄' },
+  FATURADO: { label: 'Faturado · Aguardando Baixa', short: 'Faturado', cor: '#0ea5e9', bg: 'bg-sky-50', text: 'text-sky-700', borda: 'border-sky-200', header: 'bg-sky-50 border-sky-200', dot: 'bg-sky-500', badge: 'bg-sky-100 text-sky-700', icone: '🧾' },
 }
 
-const ORDEM_ETAPAS = ['ERPV', 'CRED', 'FATU', 'EXPE', 'MACL', 'SEM']
+// "FATURADO" tem prioridade sobre as demais: já existe nota emitida no ERP,
+// mesmo que o pedido/fila ainda não tenha sido baixado (ver getEtapas).
+const ORDEM_ETAPAS = ['ERPV', 'CRED', 'FATURADO', 'FATU', 'EXPE', 'MACL', 'SEM']
 
 const BU = {
   LMP_CASA: { short: 'HC', badge: 'bg-blue-100 text-blue-700' },
@@ -24,15 +27,20 @@ const BU = {
 const fmt = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtData = iso => new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-function getEtapas(cdFilas) {
+function getEtapas(pedido) {
+  // Nota fiscal já emitida no ERP: a fila interna (evento) ainda pode não ter
+  // sido baixada, mas o que importa pro cliente/admin é que já faturou.
+  if (pedido.ja_faturado) return ['FATURADO']
+
+  const cdFilas = pedido.cd_filas
   if (!cdFilas) return ['SEM']
   const filas = cdFilas.split(',').map(s => s.trim())
   const encontradas = ORDEM_ETAPAS.filter(e => filas.includes(e))
   return encontradas.length > 0 ? encontradas : ['SEM']
 }
 
-function getEtapaPrincipal(cdFilas) {
-  return getEtapas(cdFilas)[0]
+function getEtapaPrincipal(pedido) {
+  return getEtapas(pedido)[0]
 }
 
 // ─── Badge de etapa ────────────────────────────────────────────────────────────
@@ -74,7 +82,7 @@ function PedidoRow({ pedido, cdCliens, expandido, onToggle }) {
   const [itens, setItens] = useState(null)
   const [loadingItens, setLoadingItens] = useState(false)
 
-  const etapas = getEtapas(pedido.cd_filas)
+  const etapas = getEtapas(pedido)
   const principalEtapa = etapas[0]
   const cfg = ETAPAS[principalEtapa] || ETAPAS.SEM
 
@@ -149,6 +157,11 @@ function PedidoRow({ pedido, cdCliens, expandido, onToggle }) {
                 <span>CFOP: <strong>{pedido.cfop}</strong></span>
                 <span>Tipo: <strong>{pedido.tp_ped}</strong></span>
                 <span>Fatura: <strong>{pedido.inicio_fatura ? 'Iniciada' : 'Não iniciada'}</strong></span>
+                {pedido.ja_faturado && (
+                  <span className="text-sky-700">
+                    Nota fiscal: <strong>já emitida no ERP</strong> — pendente de baixa/confirmação da fila
+                  </span>
+                )}
                 <span className="ml-auto font-medium text-gray-700">
                   {pedido.total_unidades.toLocaleString('pt-BR')} un · {fmt(pedido.valor_estimado)}
                 </span>
@@ -287,7 +300,7 @@ export default function PedidosInterativos({ session }) {
         return String(p.nu_ped).includes(busca)
       })
       .forEach(p => {
-        const etapa = getEtapaPrincipal(p.cd_filas)
+        const etapa = getEtapaPrincipal(p)
         grupos[etapa].push(p)
       })
     return grupos
@@ -298,7 +311,7 @@ export default function PedidosInterativos({ session }) {
     const totalValor = pedidos.reduce((s, p) => s + p.valor_estimado, 0)
     const por = {}
     ORDEM_ETAPAS.forEach(e => {
-      por[e] = pedidos.filter(p => getEtapaPrincipal(p.cd_filas) === e).length
+      por[e] = pedidos.filter(p => getEtapaPrincipal(p) === e).length
     })
     return { totalValor, por, total: pedidos.length }
   }, [pedidos])
@@ -336,7 +349,7 @@ export default function PedidosInterativos({ session }) {
         </div>
 
         {/* Por etapa */}
-        {['FATU','EXPE','MACL','CRED','ERPV'].map(e => {
+        {['FATURADO','FATU','EXPE','MACL','CRED','ERPV'].map(e => {
           const cfg = ETAPAS[e]
           const count = kpis.por[e]
           return (
