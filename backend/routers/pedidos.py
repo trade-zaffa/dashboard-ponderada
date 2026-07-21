@@ -133,6 +133,17 @@ def get_pedidos(cd_cliens: str = Query(...)):
                   AND e2.cd_emp = pv.cd_emp
                   AND e2.dt_encer IS NULL
             ) AS cd_filas,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM nota n
+                JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+                JOIN produto p2  ON p2.cd_prod = in2.cd_prod
+                WHERE n.nu_ped = pv.nu_ped
+                  AND n.cd_emp = pv.cd_emp
+                  AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+                  AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+                  AND p2.cd_fabric = 'UNILEV'
+            ) THEN 1 ELSE 0 END AS ja_faturado,
             COUNT(DISTINCT p.cd_prod) AS qtd_produtos,
             SUM(ip.qtde * ip.fator_est_ped) AS total_unidades,
             ROUND(SUM(ip.qtde * COALESCE(
@@ -174,6 +185,7 @@ def get_pedidos(cd_cliens: str = Query(...)):
             "inicio_fatura": r.InicioProcessoFatura,
             "etapas": r.etapas or "",
             "cd_filas": r.cd_filas or "",
+            "ja_faturado": bool(r.ja_faturado),
             "qtd_produtos": r.qtd_produtos,
             "total_unidades": int(r.total_unidades) if r.total_unidades else 0,
             "valor_estimado": float(r.valor_estimado) if r.valor_estimado else 0.0,
