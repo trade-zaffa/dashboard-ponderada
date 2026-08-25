@@ -139,6 +139,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
   const META_PCT = dados.crescimento_pct
 
   const totalMetaFat = dados.bus.reduce((s, b) => s + b.meta_fat, 0)
+  const totalFatAtual = dados.bus.reduce((s, b) => s + b.fat_atual, 0)
 
   return (
     <div className="space-y-4">
@@ -152,7 +153,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
           <p className="text-gray-400 text-xs mb-1">Potencial máximo (2,5%)</p>
           <p className="text-gray-300 text-xl font-bold">{fmtR(dados.total_potencial)}</p>
-          <p className="text-gray-500 text-[10px] mt-1">= 2,5% × {fmtR(totalMetaFat)}</p>
+          <p className="text-gray-500 text-[10px] mt-1">= 2,5% × {fmtR(totalFatAtual)} (faturamento)</p>
         </div>
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
           <p className="text-gray-400 text-xs mb-1">Ganho estimado</p>
@@ -177,8 +178,8 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
         </div>
         <div className="divide-y divide-gray-50">
           {dados.bus.map(bu => {
-            const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
-            const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+            const fatColor = bu.fat_pct >= 100 ? '#22c55e' : '#ef4444'
+            const sortColor = bu.sort_pct >= 100 ? '#22c55e' : '#ef4444'
             return (
               <div key={bu.cd_secao} className="px-5 py-4">
                 <div className="flex items-center justify-between mb-3">
@@ -215,8 +216,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
                       <div className="h-full rounded-full transition-all"
                         style={{ width: `${Math.min(100, bu.sort_pct)}%`, backgroundColor: sortColor }} />
-                      <div className="absolute top-0 h-full w-px bg-amber-400 opacity-60" style={{ left: '70%' }} title="Meta 70%" />
-                      <div className="absolute top-0 h-full w-px bg-emerald-500 opacity-60" style={{ left: '92%' }} title="Meta 92%" />
+                      <div className="absolute top-0 h-full w-px bg-emerald-500 opacity-60" style={{ left: '100%' }} title="Meta 100%" />
                     </div>
                     <span className="text-sm font-bold text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
                     <span className="text-xs text-gray-400 text-right">
@@ -868,7 +868,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
                       <p className="text-xs text-gray-400">
                         potencial: {fmtR(r.total_potencial)} <span className="text-gray-300">({r.ating_pct}%)</span>
                       </p>
-                      <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_meta_fat)}</p>
+                      <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_fat_atual)} (faturamento)</p>
                       {onSelecionarCliente && (() => {
                         const cli = clientes.find(c => c.cnpj_raiz === r.cnpj_raiz)
                         return cli ? (
@@ -884,8 +884,8 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
                   {/* Faturamento por BU */}
                   <div className="divide-y divide-gray-50">
                     {r.bus.map(bu => {
-                      const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
-                      const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+                      const fatColor = bu.fat_pct >= 100 ? '#22c55e' : '#ef4444'
+                      const sortColor = bu.sort_pct >= 100 ? '#22c55e' : '#ef4444'
                       return (
                         <div key={bu.cd_secao} className="grid grid-cols-[80px_1fr_110px] items-center gap-4 px-5 py-3">
                           {/* BU label */}

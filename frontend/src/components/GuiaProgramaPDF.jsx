@@ -360,20 +360,15 @@ export default function abrirGuiaPrograma(nomeCliente) {
             </div>
             <div class="pilar-body">
               <p class="pilar-desc">Mede quantos SKUs ativos da Unilever você compra em relação ao portfólio disponível. Cada BU tem uma meta de EANs definida pelo time comercial.</p>
-              <p class="faixa-title">Faixas de Atingimento</p>
+              <p class="faixa-title">Regra de Apuração</p>
               <div class="faixa">
                 <div class="faixa-dot" style="background:#ef4444"></div>
-                <span class="faixa-label">Abaixo de 70% dos EANs meta</span>
+                <span class="faixa-label">Abaixo de 100% dos EANs meta</span>
                 <span class="faixa-valor faixa-zero">0%</span>
               </div>
               <div class="faixa">
-                <div class="faixa-dot" style="background:#f59e0b"></div>
-                <span class="faixa-label">Entre 70% e 91% dos EANs meta</span>
-                <span class="faixa-valor faixa-meio">+0,25%</span>
-              </div>
-              <div class="faixa">
                 <div class="faixa-dot" style="background:#22c55e"></div>
-                <span class="faixa-label">92% ou mais dos EANs meta</span>
+                <span class="faixa-label">100% dos EANs meta positivados</span>
                 <span class="faixa-valor faixa-max">+0,50%</span>
               </div>
             </div>
@@ -386,16 +381,17 @@ export default function abrirGuiaPrograma(nomeCliente) {
               <span class="pilar-pct">1,00%</span>
             </div>
             <div class="pilar-body">
-              <p class="pilar-desc">Maior peso do programa. O percentual é proporcional ao atingimento da meta — quanto mais perto, maior o ganho. Meta = mesmo mês do ano anterior + 15%.</p>
-              <p class="faixa-title">Como é Calculado</p>
+              <p class="pilar-desc">Maior peso do programa. Meta = mesmo mês do ano anterior + 15%.</p>
+              <p class="faixa-title">Regra de Apuração</p>
               <div class="faixa">
-                <div class="faixa-dot" style="background:#0ea5e9"></div>
-                <span class="faixa-label">Proporcional ao % atingido (cap 100%)</span>
-                <span class="faixa-valor faixa-prop">0–1,00%</span>
+                <div class="faixa-dot" style="background:#ef4444"></div>
+                <span class="faixa-label">Abaixo de 100% da meta</span>
+                <span class="faixa-valor faixa-zero">0%</span>
               </div>
-              <div class="faixa-note">
-                Ex.: atingiu 60% da meta → ganho = 0,60%<br/>
-                Atingiu 100% ou mais → ganho máximo = 1,00%
+              <div class="faixa">
+                <div class="faixa-dot" style="background:#22c55e"></div>
+                <span class="faixa-label">100% da meta ou mais</span>
+                <span class="faixa-valor faixa-max">+1,00%</span>
               </div>
             </div>
           </div>
@@ -456,8 +452,8 @@ export default function abrirGuiaPrograma(nomeCliente) {
 <strong>Ganho Total</strong>   = Soma do ganho de todas as BUs (HC + NT + PC + BW)
           </div>
           <p class="conta-exemplo">
-            <strong>Exemplo (BU Home Care):</strong> Faturamento R$ 150.000 | Sortimento 92% → +0,50% | Fat 80% → +0,80% | PE ✓ +0,50% | Planograma ✗ 0%<br/>
-            → Total acumulado = 1,80% | <strong>Ganho HC = R$ 150.000 × 1,80% = R$ 2.700,00</strong>
+            <strong>Exemplo (BU Home Care):</strong> Faturamento R$ 150.000 | Sortimento 100% dos EANs → +0,50% | Faturamento 100%+ da meta → +1,00% | PE ✓ +0,50% | Planograma ✗ 0%<br/>
+            → Total acumulado = 2,00% | <strong>Ganho HC = R$ 150.000 × 2,00% = R$ 3.000,00</strong>
           </p>
         </div>
       </div>
@@ -594,11 +590,11 @@ export default function abrirGuiaPrograma(nomeCliente) {
         <div class="checklist">
           <div class="check-item">
             <div class="check-icon">1</div>
-            <div class="check-text"><strong>Amplie o sortimento</strong>Garanta 92%+ dos EANs meta em cada BU para atingir os 0,50% de Sortimento.</div>
+            <div class="check-text"><strong>Amplie o sortimento</strong>Garanta 100% dos EANs meta em cada BU para atingir os 0,50% de Sortimento. Abaixo de 100% não há ganho parcial.</div>
           </div>
           <div class="check-item">
             <div class="check-icon">2</div>
-            <div class="check-text"><strong>Bata a meta de faturamento</strong>O pilar é proporcional — cada % a mais de atingimento aumenta seu ganho. Não existe patamar mínimo.</div>
+            <div class="check-text"><strong>Bata a meta de faturamento</strong>É tudo ou nada — atingir 100% ou mais da meta garante +1,00%. Abaixo de 100% não há ganho parcial neste pilar.</div>
           </div>
           <div class="check-item">
             <div class="check-icon">3</div>
