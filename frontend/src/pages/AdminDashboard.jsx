@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan, adminDeleteAllSortimentoEans } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -1338,6 +1338,7 @@ function SortimentoEansAdmin({ token }) {
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState('')
   const [busca, setBusca] = useState('')
+  const [removendoTodos, setRemovendoTodos] = useState(false)
 
   const carregar = () => {
     setLoading(true)
@@ -1368,6 +1369,20 @@ function SortimentoEansAdmin({ token }) {
     setLista(l => l.filter(i => i.ean !== ean))
   }
 
+  const handleRemoverTodos = async () => {
+    if (!confirm(`Remover todos os ${lista.length} EAN(s) do sortimento? Essa ação não pode ser desfeita.`)) return
+    setRemovendoTodos(true)
+    setMsg('')
+    try {
+      await adminDeleteAllSortimentoEans(token)
+      setLista([])
+    } catch (e) {
+      setMsg(e.response?.data?.detail || 'Erro ao remover todos')
+    } finally {
+      setRemovendoTodos(false)
+    }
+  }
+
   const listaFiltrada = lista.filter(i => i.ean.includes(busca))
 
   return (
@@ -1395,13 +1410,21 @@ function SortimentoEansAdmin({ token }) {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
             {lista.length} EAN{lista.length !== 1 ? 's' : ''} no sortimento
           </p>
-          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar EAN..."
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+          <div className="flex items-center gap-2">
+            <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar EAN..."
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+            {lista.length > 0 && (
+              <button onClick={handleRemoverTodos} disabled={removendoTodos}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
+                {removendoTodos ? 'Removendo...' : '🗑 Remover todos'}
+              </button>
+            )}
+          </div>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-10 text-gray-400">

@@ -57,3 +57,14 @@ def delete_sortimento_ean(ean: str, authorization: str = Header(None)):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+@router.delete("/admin/sortimento-eans")
+def delete_all_sortimento_eans(authorization: str = Header(None)):
+    _check_admin(authorization)
+    conn = get_db()
+    cur = conn.execute("DELETE FROM sortimento_ean")
+    removidos = cur.rowcount
+    conn.commit()
+    conn.close()
+    return {"ok": True, "removidos": removidos}

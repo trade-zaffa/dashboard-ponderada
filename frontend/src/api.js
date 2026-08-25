@@ -96,3 +96,6 @@ export const adminAddSortimentoEans = (token, eans) =>
 
 export const adminDeleteSortimentoEan = (token, ean) =>
   api.delete(`/admin/sortimento-eans/${ean}`, adminHeaders(token))
+
+export const adminDeleteAllSortimentoEans = (token) =>
+  api.delete('/admin/sortimento-eans', adminHeaders(token))
