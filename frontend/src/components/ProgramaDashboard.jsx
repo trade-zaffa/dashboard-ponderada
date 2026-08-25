@@ -115,7 +115,7 @@ function BUCard({ bu, data }) {
             <div className="text-right">
               <p className="text-[10px] text-gray-400 uppercase tracking-wide">Potencial (2,5%)</p>
               <p className="text-sm font-bold text-[#c9a227]">{fmtFull(data.potencial_bu)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">= 2,5% × meta</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">= 2,5% × faturamento</p>
             </div>
           </div>
         )}
@@ -146,8 +146,7 @@ function BUCard({ bu, data }) {
             </div>
             <div className="flex justify-between mt-1 text-[10px] text-gray-400">
               <span>0%</span>
-              <span className="text-amber-500">70% (+0,25%)</span>
-              <span className="text-emerald-500">92% (+0,50%)</span>
+              <span className="text-emerald-500">100% (+0,50%)</span>
             </div>
           </div>
 
@@ -215,7 +214,7 @@ function BUCard({ bu, data }) {
         {/* Ganho calculado desta BU */}
         {data.meta_fat > 0 && (
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-            <span className="text-xs text-gray-400">Ganho apurado ({(data.total_peso).toFixed(2)}% × {fmtR(data.meta_fat)})</span>
+            <span className="text-xs text-gray-400">Ganho apurado ({(data.total_peso).toFixed(2)}% × {fmtR(data.fat_atual)})</span>
             <span className="text-sm font-bold text-gray-800">{fmtFull(data.ganho_bu)}</span>
           </div>
         )}
@@ -328,7 +327,7 @@ export default function ProgramaDashboard({ session, isAdmin = false }) {
             <p className="text-5xl font-bold mt-2 text-[#c9a227]">{fmtFull(data.total_ganho)}</p>
             <div className="flex items-baseline gap-2 mt-1">
               <p className="text-sm text-white/40">de {fmtFull(data.total_potencial)} potencial</p>
-              <p className="text-xs text-white/25">(2,5% × {fmtFull(data.bus.reduce((s,b)=>s+b.meta_fat,0))} meta total)</p>
+              <p className="text-xs text-white/25">(2,5% × {fmtFull(data.bus.reduce((s,b)=>s+b.fat_atual,0))} faturamento total)</p>
             </div>
           </div>
           <div className="text-right">

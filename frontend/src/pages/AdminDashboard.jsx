@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan } from '../api'
+import { adminGetClientes, adminGetSortimentoResumo, adminGetMetas, getSortimento, adminGetSenhas, adminSetSenha, adminDeleteSenha, adminGetProgramaExecucao, adminSetProgramaExecucao, adminGetProgramaResumo, adminGetProgramaConfig, adminSetProgramaConfig, getPrograma, adminGetPedidosAbertosMes, adminGetPedidosFaturadosMes, adminGetEstoque, adminGetSortimentoEans, adminAddSortimentoEans, adminDeleteSortimentoEan, adminDeleteAllSortimentoEans } from '../api'
 import * as XLSX from 'xlsx'
 import PedidosInterativos from '../components/PedidosInterativos'
 import GerarPedido from '../components/GerarPedido'
@@ -139,6 +139,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
   const META_PCT = dados.crescimento_pct
 
   const totalMetaFat = dados.bus.reduce((s, b) => s + b.meta_fat, 0)
+  const totalFatAtual = dados.bus.reduce((s, b) => s + b.fat_atual, 0)
 
   return (
     <div className="space-y-4">
@@ -152,7 +153,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
           <p className="text-gray-400 text-xs mb-1">Potencial máximo (2,5%)</p>
           <p className="text-gray-300 text-xl font-bold">{fmtR(dados.total_potencial)}</p>
-          <p className="text-gray-500 text-[10px] mt-1">= 2,5% × {fmtR(totalMetaFat)}</p>
+          <p className="text-gray-500 text-[10px] mt-1">= 2,5% × {fmtR(totalFatAtual)} (faturamento)</p>
         </div>
         <div className="bg-[#1a1a2e] rounded-xl p-4 text-center">
           <p className="text-gray-400 text-xs mb-1">Ganho estimado</p>
@@ -177,8 +178,8 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
         </div>
         <div className="divide-y divide-gray-50">
           {dados.bus.map(bu => {
-            const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
-            const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+            const fatColor = bu.fat_pct >= 100 ? '#22c55e' : '#ef4444'
+            const sortColor = bu.sort_pct >= 100 ? '#22c55e' : '#ef4444'
             return (
               <div key={bu.cd_secao} className="px-5 py-4">
                 <div className="flex items-center justify-between mb-3">
@@ -215,8 +216,7 @@ function ProgramaClienteAdmin({ cliente, periodo }) {
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
                       <div className="h-full rounded-full transition-all"
                         style={{ width: `${Math.min(100, bu.sort_pct)}%`, backgroundColor: sortColor }} />
-                      <div className="absolute top-0 h-full w-px bg-amber-400 opacity-60" style={{ left: '70%' }} title="Meta 70%" />
-                      <div className="absolute top-0 h-full w-px bg-emerald-500 opacity-60" style={{ left: '92%' }} title="Meta 92%" />
+                      <div className="absolute top-0 h-full w-px bg-emerald-500 opacity-60" style={{ left: '100%' }} title="Meta 100%" />
                     </div>
                     <span className="text-sm font-bold text-right" style={{ color: sortColor }}>{bu.sort_pct}%</span>
                     <span className="text-xs text-gray-400 text-right">
@@ -868,7 +868,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
                       <p className="text-xs text-gray-400">
                         potencial: {fmtR(r.total_potencial)} <span className="text-gray-300">({r.ating_pct}%)</span>
                       </p>
-                      <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_meta_fat)}</p>
+                      <p className="text-[10px] text-gray-400">2,5% × {fmtR(r.total_fat_atual)} (faturamento)</p>
                       {onSelecionarCliente && (() => {
                         const cli = clientes.find(c => c.cnpj_raiz === r.cnpj_raiz)
                         return cli ? (
@@ -884,8 +884,8 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
                   {/* Faturamento por BU */}
                   <div className="divide-y divide-gray-50">
                     {r.bus.map(bu => {
-                      const fatColor = bu.fat_pct >= 100 ? '#22c55e' : bu.fat_pct >= 70 ? '#f59e0b' : '#ef4444'
-                      const sortColor = bu.sort_pct >= 92 ? '#22c55e' : bu.sort_pct >= 70 ? '#f59e0b' : '#ef4444'
+                      const fatColor = bu.fat_pct >= 100 ? '#22c55e' : '#ef4444'
+                      const sortColor = bu.sort_pct >= 100 ? '#22c55e' : '#ef4444'
                       return (
                         <div key={bu.cd_secao} className="grid grid-cols-[80px_1fr_110px] items-center gap-4 px-5 py-3">
                           {/* BU label */}
@@ -1338,6 +1338,7 @@ function SortimentoEansAdmin({ token }) {
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState('')
   const [busca, setBusca] = useState('')
+  const [removendoTodos, setRemovendoTodos] = useState(false)
 
   const carregar = () => {
     setLoading(true)
@@ -1368,6 +1369,20 @@ function SortimentoEansAdmin({ token }) {
     setLista(l => l.filter(i => i.ean !== ean))
   }
 
+  const handleRemoverTodos = async () => {
+    if (!confirm(`Remover todos os ${lista.length} EAN(s) do sortimento? Essa ação não pode ser desfeita.`)) return
+    setRemovendoTodos(true)
+    setMsg('')
+    try {
+      await adminDeleteAllSortimentoEans(token)
+      setLista([])
+    } catch (e) {
+      setMsg(e.response?.data?.detail || 'Erro ao remover todos')
+    } finally {
+      setRemovendoTodos(false)
+    }
+  }
+
   const listaFiltrada = lista.filter(i => i.ean.includes(busca))
 
   return (
@@ -1395,13 +1410,21 @@ function SortimentoEansAdmin({ token }) {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
             {lista.length} EAN{lista.length !== 1 ? 's' : ''} no sortimento
           </p>
-          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar EAN..."
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+          <div className="flex items-center gap-2">
+            <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar EAN..."
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] w-52" />
+            {lista.length > 0 && (
+              <button onClick={handleRemoverTodos} disabled={removendoTodos}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
+                {removendoTodos ? 'Removendo...' : '🗑 Remover todos'}
+              </button>
+            )}
+          </div>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-10 text-gray-400">

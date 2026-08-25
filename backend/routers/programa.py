@@ -32,11 +32,7 @@ _init_programa_tables()
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _sortimento_faixa(pct: float) -> float:
-    if pct >= 92:
-        return 0.50
-    if pct >= 70:
-        return 0.25
-    return 0.0
+    return 0.50 if pct >= 100 else 0.0
 
 
 def _sql_faturado(ph: str, incluir_avista: bool = False) -> str:
@@ -181,17 +177,17 @@ def get_programa(
         sort_pct  = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
         sort_peso = _sortimento_faixa(sort_pct)
 
-        # Faturamento proporcional (cap 100%)
+        # Faturamento: tudo ou nada (100%+ da meta = peso cheio)
         fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
-        fat_peso = fat_pct / 100 * 1.0
+        fat_peso = 1.0 if fat_pct >= 100.0 else 0.0
 
         # PE e Planograma
         pe_peso   = 0.50 if ponto_extra else 0.0
         plan_peso = 0.50 if planograma  else 0.0
 
         total_peso   = sort_peso + pe_peso + plan_peso + fat_peso
-        ganho_bu     = meta_fat * total_peso / 100
-        potencial_bu = meta_fat * 2.50 / 100
+        ganho_bu     = fat_atual * total_peso / 100
+        potencial_bu = fat_atual * 2.50 / 100
 
         total_ganho     += ganho_bu
         total_potencial += potencial_bu
@@ -442,14 +438,14 @@ def get_programa_resumo(
             sort_peso = _sortimento_faixa(sort_pct)
 
             fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
-            fat_peso = fat_pct / 100 * 1.0
+            fat_peso = 1.0 if fat_pct >= 100.0 else 0.0
 
             pe_peso   = 0.50 if ponto_extra else 0.0
             plan_peso = 0.50 if planograma  else 0.0
 
             total_peso   = sort_peso + pe_peso + plan_peso + fat_peso
-            ganho_bu     = meta_fat * total_peso / 100
-            potencial_bu = meta_fat * 2.50 / 100
+            ganho_bu     = fat_atual * total_peso / 100
+            potencial_bu = fat_atual * 2.50 / 100
 
             total_ganho     += ganho_bu
             total_potencial += potencial_bu
