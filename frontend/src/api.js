@@ -79,11 +79,11 @@ export const adminGetProgramaConfig = (token) =>
 export const adminSetProgramaConfig = (token, incluir_avista) =>
   api.post('/admin/programa-config', { incluir_avista }, adminHeaders(token))
 
-export const adminGetPedidosAbertosMes = (token) =>
-  api.get('/admin/pedidos-abertos-mes', adminHeaders(token))
+export const adminGetPedidosAbertosMes = (token, periodo = {}) =>
+  api.get('/admin/pedidos-abertos-mes', { ...adminHeaders(token), params: periodo })
 
-export const adminGetPedidosFaturadosMes = (token) =>
-  api.get('/admin/pedidos-faturados-mes', adminHeaders(token))
+export const adminGetPedidosFaturadosMes = (token, periodo = {}) =>
+  api.get('/admin/pedidos-faturados-mes', { ...adminHeaders(token), params: periodo })
 
 export const adminGetEstoque = (token) =>
   api.get('/admin/estoque', adminHeaders(token))

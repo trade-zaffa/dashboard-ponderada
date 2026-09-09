@@ -1017,7 +1017,7 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
 const BU_LABEL_P = { LMP_CASA: 'HC', AL_NUT: 'NT', LMP_CUPE: 'PC', HGPER_BB: 'BW' }
 const BU_COR_P   = { LMP_CASA: '#3b82f6', AL_NUT: '#22c55e', LMP_CUPE: '#ec4899', HGPER_BB: '#a855f7' }
 
-function PedidosAdmin({ token }) {
+function PedidosAdmin({ token, periodo }) {
   const [subTab, setSubTab] = useState('abertos')
   const [dadosAbertos, setDadosAbertos] = useState(null)
   const [dadosFaturados, setDadosFaturados] = useState(null)
@@ -1028,14 +1028,14 @@ function PedidosAdmin({ token }) {
     setLoading(true)
     setErro('')
     Promise.all([
-      adminGetPedidosAbertosMes(token),
-      adminGetPedidosFaturadosMes(token),
+      adminGetPedidosAbertosMes(token, periodo),
+      adminGetPedidosFaturadosMes(token, periodo),
     ]).then(([ra, rf]) => {
       setDadosAbertos(ra.data)
       setDadosFaturados(rf.data)
     }).catch(e => setErro(e.response?.data?.detail || 'Erro ao carregar pedidos'))
       .finally(() => setLoading(false))
-  }, [token])
+  }, [token, periodo])
 
   const fmtR = v => v == null ? 'R$ 0' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -1070,6 +1070,7 @@ function PedidosAdmin({ token }) {
     ['cliente', 'Cliente'], ['nu_ped', 'Pedido'], ['dt_pedido', 'Data'],
     ['cd_secao', 'BU'], ['ean', 'EAN'], ['produto', 'Produto'],
     ['qtde_cx', 'Qtde'], ['unid_ped', 'Unidade Pedida'], ['total_un', 'Total UN'], ['valor_item', 'Valor (R$)'], ['etapa', 'Etapa'],
+    ['ja_faturado', 'Já Faturado (aguard. baixa)'],
   ]
   const colsFaturados = [
     ['cliente', 'Cliente'], ['nu_nf', 'NF'], ['dt_emissao', 'Emissão'],
@@ -1082,9 +1083,10 @@ function PedidosAdmin({ token }) {
     if (!dadosAbertos) return []
     const map = {}
     dadosAbertos.forEach(r => {
-      if (!map[r.cliente]) map[r.cliente] = { cliente: r.cliente, pedidos: new Set(), valor: 0, buMap: {} }
+      if (!map[r.cliente]) map[r.cliente] = { cliente: r.cliente, pedidos: new Set(), valor: 0, valorBaixa: 0, buMap: {} }
       map[r.cliente].pedidos.add(r.nu_ped)
       map[r.cliente].valor += r.valor_item
+      if (r.ja_faturado) map[r.cliente].valorBaixa += r.valor_item
       if (!map[r.cliente].buMap[r.cd_secao]) map[r.cliente].buMap[r.cd_secao] = 0
       map[r.cliente].buMap[r.cd_secao] += r.valor_item
     })
@@ -1108,7 +1110,8 @@ function PedidosAdmin({ token }) {
     }))
   }, [dadosFaturados])
 
-  const totalAbertos  = resumoAbertos.reduce((s, r) => s + r.valor, 0)
+  const totalAbertos       = resumoAbertos.reduce((s, r) => s + r.valor, 0)
+  const totalAguardaBaixa  = resumoAbertos.reduce((s, r) => s + r.valorBaixa, 0)
   const totalFaturado = resumoFaturados.reduce((s, r) => s + r.valor, 0)
 
   if (loading) return (
@@ -1163,7 +1166,7 @@ function PedidosAdmin({ token }) {
 
       {/* Total */}
       {dados && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className={`grid gap-4 ${subTab === 'abertos' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
             <p className="text-2xl font-bold text-[#1e3a5f]">{resumo.length}</p>
             <p className="text-xs text-gray-400 mt-1">Clientes</p>
@@ -1180,6 +1183,12 @@ function PedidosAdmin({ token }) {
             <p className="text-2xl font-bold text-emerald-600">{fmtR(total)}</p>
             <p className="text-xs text-gray-400 mt-1">Total {subTab === 'abertos' ? 'em aberto' : 'faturado'}</p>
           </div>
+          {subTab === 'abertos' && (
+            <div className="bg-white rounded-xl border border-sky-100 shadow-sm p-4 text-center" title="Pedidos com nota fiscal já emitida no ERP, mas ainda não baixados da fila 'Em Aberto' — contam também em Faturado.">
+              <p className="text-2xl font-bold text-sky-600">{fmtR(totalAguardaBaixa)}</p>
+              <p className="text-xs text-gray-400 mt-1">🧾 Já faturado (aguard. baixa)</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1188,7 +1197,7 @@ function PedidosAdmin({ token }) {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              {subTab === 'abertos' ? 'Pedidos em Aberto — Mês Atual' : 'Faturamento — Mês Atual'}
+              {subTab === 'abertos' ? 'Pedidos em Aberto' : 'Faturamento'} — {MESES[periodo.mes - 1]} {periodo.ano}
             </p>
           </div>
           <div className="divide-y divide-gray-50">
@@ -1212,6 +1221,12 @@ function PedidosAdmin({ token }) {
                       {BU_LABEL_P[bu] || bu} · {fmtR(val)}
                     </span>
                   ))}
+                  {subTab === 'abertos' && r.valorBaixa > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium"
+                      title="Já tem nota fiscal emitida no ERP, aguardando baixa da fila. Também aparece em Faturado.">
+                      🧾 {fmtR(r.valorBaixa)} aguard. baixa
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -1939,7 +1954,7 @@ export default function AdminDashboard({ token, onLogout }) {
         )}
 
         {tab === 'pedidos' && (
-          <PedidosAdmin token={token} />
+          <PedidosAdmin token={token} periodo={periodo} />
         )}
 
         {tab === 'estoque' && (
