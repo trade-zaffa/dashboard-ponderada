@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Header
 from database import get_connection
 from curva_abc import get_curva_abc_map
 from programa_config import get_incluir_avista, filtro_avista
+from datetime import date
 import os
 
 # Endpoints /pedidos* (sem prefixo /admin/) sao usados pelo cliente -- prazo
@@ -262,11 +263,19 @@ def get_pedido_itens(nu_ped: int, cd_cliens: str = Query(...)):
 
 
 @router.get("/admin/pedidos-abertos-mes")
-def admin_pedidos_abertos_mes(authorization: str = Header(None)):
-    """Pedidos em aberto do mês atual — todos os clientes Ponderada."""
+def admin_pedidos_abertos_mes(
+    authorization: str = Header(None),
+    mes: int = Query(None),
+    ano: int = Query(None),
+):
+    """Pedidos em aberto do mês/ano informado (padrão: mês atual) — todos os clientes Ponderada."""
     _verificar_admin(authorization)
+    incluir_avista = get_incluir_avista()
+    hoje = date.today()
+    mes = mes or hoje.month
+    ano = ano or hoje.year
 
-    sql = """
+    sql = f"""
         SELECT
             c.nome                                                         AS cliente,
             pv.nu_ped,
@@ -286,7 +295,18 @@ def admin_pedidos_abertos_mes(authorization: str = Header(None)):
                 FROM evento e2
                 LEFT JOIN fila f2 ON f2.cd_fila = e2.cd_fila
                 WHERE e2.nu_ped = pv.nu_ped AND e2.cd_emp = pv.cd_emp AND e2.dt_encer IS NULL
-            )                                                              AS etapa
+            )                                                              AS etapa,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM nota n
+                JOIN it_nota in2 ON in2.nu_nf = n.nu_nf
+                JOIN produto p2  ON p2.cd_prod = in2.cd_prod
+                WHERE n.nu_ped = pv.nu_ped
+                  AND n.cd_emp = pv.cd_emp
+                  AND LEFT(LTRIM(n.desc_cfop),4) IN ('5101','5102','5405','5922','6102')
+                  AND n.situacao IN ('AB','DP') AND n.tipo_nf = 'S'
+                  AND p2.cd_fabric = 'UNILEV'
+            ) THEN 1 ELSE 0 END                                            AS ja_faturado
         FROM ped_vda pv
         JOIN it_pedv ip            ON ip.nu_ped = pv.nu_ped AND ip.cd_emp = pv.cd_emp
         JOIN produto p             ON p.cd_prod = ip.cd_prod
@@ -294,6 +314,7 @@ def admin_pedidos_abertos_mes(authorization: str = Header(None)):
         JOIN secao s               ON s.cd_secao = l.cd_secao
         JOIN cliente c             ON c.cd_clien = pv.cd_clien
         JOIN CliSegmentoFabric csf ON csf.CdClien = c.cd_clien
+        LEFT JOIN promocao pr      ON pr.seq_prom = pv.seq_prom
         WHERE csf.CdFabric = 'UNILEV'
           AND csf.RamAtiv IN ('33  ','34  ')
           AND c.ativo = 1
@@ -303,8 +324,9 @@ def admin_pedidos_abertos_mes(authorization: str = Header(None)):
           AND p.cd_fabric = 'UNILEV'
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
-          AND MONTH(pv.dt_cad) = MONTH(GETDATE())
-          AND YEAR(pv.dt_cad) = YEAR(GETDATE())
+          {filtro_avista(incluir_avista)}
+          AND MONTH(pv.dt_cad) = {mes}
+          AND YEAR(pv.dt_cad) = {ano}
         ORDER BY c.nome, pv.nu_ped, s.cd_secao
     """
 
@@ -319,27 +341,35 @@ def admin_pedidos_abertos_mes(authorization: str = Header(None)):
 
     return [
         {
-            "cliente":    r.cliente.strip() if r.cliente else "",
-            "nu_ped":     r.nu_ped,
-            "dt_pedido":  str(r.dt_pedido),
-            "cd_secao":   r.cd_secao.strip(),
-            "ean":        r.ean or "",
-            "produto":    r.produto.strip() if r.produto else "",
-            "qtde_cx":    float(r.qtde_cx) if r.qtde_cx else 0.0,
-            "unid_ped":   (r.unid_ped or "").strip(),
-            "total_un":   int(r.total_un) if r.total_un else 0,
-            "valor_item": float(r.valor_item) if r.valor_item else 0.0,
-            "etapa":      r.etapa or "",
+            "cliente":     r.cliente.strip() if r.cliente else "",
+            "nu_ped":      r.nu_ped,
+            "dt_pedido":   str(r.dt_pedido),
+            "cd_secao":    r.cd_secao.strip(),
+            "ean":         r.ean or "",
+            "produto":     r.produto.strip() if r.produto else "",
+            "qtde_cx":     float(r.qtde_cx) if r.qtde_cx else 0.0,
+            "unid_ped":    (r.unid_ped or "").strip(),
+            "total_un":    int(r.total_un) if r.total_un else 0,
+            "valor_item":  float(r.valor_item) if r.valor_item else 0.0,
+            "etapa":       r.etapa or "",
+            "ja_faturado": bool(r.ja_faturado),
         }
         for r in rows
     ]
 
 
 @router.get("/admin/pedidos-faturados-mes")
-def admin_pedidos_faturados_mes(authorization: str = Header(None)):
-    """Faturamento do mês atual — todos os clientes Ponderada."""
+def admin_pedidos_faturados_mes(
+    authorization: str = Header(None),
+    mes: int = Query(None),
+    ano: int = Query(None),
+):
+    """Faturamento do mês/ano informado (padrão: mês atual) — todos os clientes Ponderada."""
     _verificar_admin(authorization)
     incluir_avista = get_incluir_avista()
+    hoje = date.today()
+    mes = mes or hoje.month
+    ano = ano or hoje.year
 
     sql = f"""
         SELECT
@@ -375,8 +405,8 @@ def admin_pedidos_faturados_mes(authorization: str = Header(None)):
           AND s.cd_secao IN ('LMP_CASA','AL_NUT','LMP_CUPE','HGPER_BB')
           AND s.descricao NOT LIKE '%DISPLAY/EXPOSITOR%'
           {filtro_avista(incluir_avista)}
-          AND MONTH(n.dt_emis) = MONTH(GETDATE())
-          AND YEAR(n.dt_emis) = YEAR(GETDATE())
+          AND MONTH(n.dt_emis) = {mes}
+          AND YEAR(n.dt_emis) = {ano}
         ORDER BY c.nome, n.dt_emis DESC, s.cd_secao
     """
 
