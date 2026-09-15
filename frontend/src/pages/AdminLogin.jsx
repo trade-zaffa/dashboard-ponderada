@@ -13,8 +13,8 @@ export default function AdminLogin({ onLogin }) {
     try {
       await adminLogin(senha)
       onLogin(senha)
-    } catch {
-      setError('Senha incorreta')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Erro ao conectar. Tente novamente.')
     } finally {
       setLoading(false)
     }
