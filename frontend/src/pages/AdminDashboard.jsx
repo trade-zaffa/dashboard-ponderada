@@ -768,6 +768,11 @@ function SortimentoCliente({ cliente, periodo, onVoltar, hideHeader }) {
 const BU_PROGRAMA = ['LMP_CASA', 'AL_NUT', 'LMP_CUPE', 'HGPER_BB']
 const BU_LABELS_P = { LMP_CASA: 'HC · Home Care', AL_NUT: 'NT · Nutrição', LMP_CUPE: 'PC · Personal Care', HGPER_BB: 'BW · Beleza' }
 
+// Início do Programa Ponderada — não faz sentido gerar relatório de antes disso.
+const REL_CAMPANHA_MES = 7
+const REL_CAMPANHA_ANO = 2026
+const REL_MAX_MESES = 36 // trava de segurança: evita martelar o ERP com um range gigante sem querer
+
 function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirAvista }) {
   const { mes, ano } = periodo
   const [execucao, setExecucao] = useState({})
@@ -776,6 +781,13 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
   const [loadingResumo, setLoadingResumo] = useState(false)
   const [erroResumo, setErroResumo] = useState('')
   const [subTab, setSubTab] = useState('ranking')
+
+  // ── Relatório Completo (mês a mês, todos os clientes) ──────────────────────
+  const hojeRel = new Date()
+  const [relIni, setRelIni] = useState({ mes: REL_CAMPANHA_MES, ano: REL_CAMPANHA_ANO })
+  const [relFim, setRelFim] = useState({ mes: hojeRel.getMonth() + 1, ano: hojeRel.getFullYear() })
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false)
+  const [progressoRelatorio, setProgressoRelatorio] = useState('')
 
   useEffect(() => {
     adminGetProgramaExecucao(token, mes, ano).then(r => setExecucao(r.data)).catch(() => {})
@@ -804,6 +816,86 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
     return c ? c.nome : cnpj_raiz
   }
 
+  const mesesEntre = (ini, fim) => {
+    const lista = []
+    let m = ini.mes, a = ini.ano
+    while (a < fim.ano || (a === fim.ano && m <= fim.mes)) {
+      lista.push({ mes: m, ano: a })
+      m++
+      if (m > 12) { m = 1; a++ }
+    }
+    return lista
+  }
+
+  const gerarRelatorioCompleto = async () => {
+    const lista = mesesEntre(relIni, relFim)
+    if (lista.length === 0) {
+      alert('Período inválido: "Até" precisa ser igual ou depois de "De".')
+      return
+    }
+    if (lista.length > REL_MAX_MESES) {
+      alert(`Período muito longo (${lista.length} meses). Reduza para até ${REL_MAX_MESES} meses por relatório.`)
+      return
+    }
+
+    setGerandoRelatorio(true)
+    const resumoMensal = []
+    const detalhePorBU = []
+    try {
+      for (let i = 0; i < lista.length; i++) {
+        const { mes: m, ano: a } = lista[i]
+        setProgressoRelatorio(`${MESES[m - 1]} ${a} (${i + 1}/${lista.length})`)
+        const r = await adminGetProgramaResumo(token, m, a)
+        r.data.forEach(cli => {
+          const nome = nomeCliente(cli.cnpj_raiz)
+          resumoMensal.push({
+            Cliente: nome,
+            'CNPJ Raiz': cli.cnpj_raiz,
+            Mês: MESES[m - 1],
+            Ano: a,
+            'Faturamento Atual (R$)': cli.total_fat_atual,
+            'Meta Faturamento (R$)': cli.total_meta_fat,
+            'Faturamento (%)': cli.fat_pct_total,
+            'Ponto Extra': cli.ponto_extra ? 'Sim' : 'Não',
+            'Planograma': cli.planograma ? 'Sim' : 'Não',
+            'Ganho Total (R$)': cli.total_ganho,
+            'Potencial Total (R$)': cli.total_potencial,
+            'Atingimento do Potencial (%)': cli.ating_pct,
+          })
+          cli.bus.forEach(bu => {
+            detalhePorBU.push({
+              Cliente: nome,
+              'CNPJ Raiz': cli.cnpj_raiz,
+              Mês: MESES[m - 1],
+              Ano: a,
+              BU: BU_FULL_LONG[bu.cd_secao] || bu.cd_secao,
+              'Faturamento Atual (R$)': bu.fat_atual,
+              'Meta Faturamento (R$)': bu.meta_fat,
+              'Faturamento (%)': bu.fat_pct,
+              'Sortimento Positivado': bu.sort_positivado,
+              'Sortimento Meta (EANs)': bu.meta_eans || bu.sort_total,
+              'Sortimento (%)': bu.sort_pct,
+              'Ponto Extra': cli.ponto_extra ? 'Sim' : 'Não',
+              'Planograma': cli.planograma ? 'Sim' : 'Não',
+              'Ganho da BU (R$)': bu.ganho_bu,
+            })
+          })
+        })
+      }
+
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumoMensal), 'Resumo Mensal')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalhePorBU), 'Detalhe por BU')
+      const nomeArq = `Relatorio_Completo_Ponderada_${relIni.mes}-${relIni.ano}_a_${relFim.mes}-${relFim.ano}.xlsx`
+      XLSX.writeFile(wb, nomeArq)
+    } catch (e) {
+      alert('Erro ao gerar relatório: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setGerandoRelatorio(false)
+      setProgressoRelatorio('')
+    }
+  }
+
   const fmtR = (v) => {
     if (!v) return 'R$ 0'
     if (v >= 1_000_000) return `R$ ${(v/1_000_000).toFixed(1)}M`
@@ -818,6 +910,48 @@ function ProgramaAdmin({ token, clientes, periodo, onSelecionarCliente, incluirA
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 text-sm text-blue-700">
         Meta = faturamento de {ano - 1} no mesmo mês + 15%, calculada individualmente por cliente e BU.
+      </div>
+
+      {/* Relatório Completo — mês a mês, todos os clientes */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">De</label>
+          <div className="flex gap-1.5">
+            <select value={relIni.mes} onChange={e => setRelIni(p => ({ ...p, mes: Number(e.target.value) }))}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]">
+              {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+            </select>
+            <select value={relIni.ano} onChange={e => setRelIni(p => ({ ...p, ano: Number(e.target.value) }))}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]">
+              {[2025, 2026, 2027, 2028].map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Até</label>
+          <div className="flex gap-1.5">
+            <select value={relFim.mes} onChange={e => setRelFim(p => ({ ...p, mes: Number(e.target.value) }))}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]">
+              {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+            </select>
+            <select value={relFim.ano} onChange={e => setRelFim(p => ({ ...p, ano: Number(e.target.value) }))}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]">
+              {[2025, 2026, 2027, 2028].map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={gerarRelatorioCompleto} disabled={gerandoRelatorio}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 flex items-center gap-2">
+          {gerandoRelatorio ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              {progressoRelatorio || 'Gerando...'}
+            </>
+          ) : <>📄 Gerar Relatório Completo</>}
+        </button>
+        <span className="text-xs text-gray-400 max-w-xs">
+          Faturamento, Sortimento e Execução (Ponto Extra/Planograma) de todos os clientes, mês a mês — Excel com resumo e detalhe por BU.
+        </span>
       </div>
 
       {/* Sub-tabs */}
