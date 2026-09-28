@@ -177,8 +177,13 @@ def get_programa(
         sort_pct  = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
         sort_peso = _sortimento_faixa(sort_pct)
 
-        # Faturamento: tudo ou nada (100%+ da meta = peso cheio)
-        fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
+        # Faturamento: tudo ou nada (100%+ da meta = peso cheio).
+        # Meta zerada (nada faturado no mesmo mês do ano anterior) não trava o
+        # cliente sem pontuar pra sempre: qualquer compra já bate a meta.
+        if meta_fat > 0:
+            fat_pct = min(100.0, fat_atual / meta_fat * 100)
+        else:
+            fat_pct = 100.0 if fat_atual > 0 else 0.0
         fat_peso = 1.0 if fat_pct >= 100.0 else 0.0
 
         # PE e Planograma
@@ -437,7 +442,12 @@ def get_programa_resumo(
             sort_pct  = (sort_pos / meta_eans * 100) if meta_eans > 0 else 0.0
             sort_peso = _sortimento_faixa(sort_pct)
 
-            fat_pct  = min(100.0, (fat_atual / meta_fat * 100) if meta_fat > 0 else 0.0)
+            # Meta zerada (nada faturado no mesmo mês do ano anterior): qualquer
+            # compra já bate a meta, em vez de travar o cliente sem pontuar.
+            if meta_fat > 0:
+                fat_pct = min(100.0, fat_atual / meta_fat * 100)
+            else:
+                fat_pct = 100.0 if fat_atual > 0 else 0.0
             fat_peso = 1.0 if fat_pct >= 100.0 else 0.0
 
             pe_peso   = 0.50 if ponto_extra else 0.0
